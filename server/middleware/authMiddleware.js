@@ -1,50 +1,30 @@
-const jwt = require('jsonwebtoken');
+// const jwt = require('jsonwebtoken');
+// const User = require('../models/User');
 
-module.exports = function authMiddleware() {
-  return (req, res, next) => {
-    console.log('Entering authMiddleware');
-    try {
-      console.log('Headers:', JSON.stringify(req.headers));
-      const authHeader = req.headers && req.headers['authorization'];
-      console.log('Auth header:', authHeader);
+// const authMiddleware = async (req, res, next) => {
+//   try {
+//     const authHeader = req.header('Authorization');
+//     if (!authHeader) {
+//       return res.status(401).send({ error: 'Authorization header missing' });
+//     }
 
-      if (!authHeader) {
-        console.log('No authorization header found');
-        return res.status(401).json({ message: 'No token, authorization denied' });
-      }
+//     const token = authHeader.replace('Bearer ', '');
+//     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-      const token = authHeader.replace('Bearer ', '');
-      console.log('Extracted token:', token);
+//     const user = await User.findOne({ _id: decoded.id, isVerified: true });
+//     if (!user) {
+//       return res.status(401).send({ error: 'User not found or not verified' });
+//     }
 
-      console.log('JWT_SECRET:', process.env.JWT_SECRET ? 'Set' : 'Not set');
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      console.log('Decoded token:', JSON.stringify(decoded));
+//     req.token = token;
+//     req.user = user;
+//     next();
+//   } catch (error) {
+//     if (error.name === 'TokenExpiredError') {
+//       return res.status(401).send({ error: 'Token expired' });
+//     }
+//     res.status(401).send({ error: 'Please authenticate' });
+//   }
+// };
 
-      req.user = decoded.user;
-      console.log('User set on request:', JSON.stringify(req.user));
-      console.log('Calling next middleware');
-      next();
-    } catch (error) {
-      console.error('Error in authMiddleware:', error);
-      console.error('Error name:', error.name);
-      console.error('Error message:', error.message);
-      console.error('Error stack:', error.stack);
-
-      if (res && typeof res.status === 'function') {
-        console.log('Sending 401 response');
-        res.status(401).json({ message: 'Token is not valid' });
-      } else {
-        console.error('Unable to send response, res object is not available');
-        console.log('res object:', res);
-        if (typeof next === 'function') {
-          console.log('Calling next with error');
-          next(error);
-        } else {
-          console.error('next is not a function, unable to pass error');
-          console.log('next:', next);
-        }
-      }
-    }
-    console.log('Exiting authMiddleware');
-  };
-};
+// module.exports = authMiddleware;
