@@ -154,61 +154,19 @@ app.post('/api/register-staff', async (req, res) => {
 
 app.post('/api/outpass', async (req, res) => {
   try {
-    console.log('[OUTPASS] Request received:', JSON.stringify(req.body))
-    const {
-      outpassType,
-      reason,
-      destination,
-      contactNumber,
-      dateOfGoing,
-      timeOfGoing,
-      dateOfArrival,
-      timeOfArrival,
-      student
-    } = req.body
+    const { outpassType, reason, destination, dateOfGoing, timeOfGoing, dateOfArrival, timeOfArrival, studentId } = req.body
 
-    console.log('[OUTPASS] Validating student fields:', JSON.stringify(student))
-    if (!student.userId || !student.class || !student.department || 
-        !student.coordinator || !student.hod) {
-      console.log('[OUTPASS] Validation failed - Missing fields:', {
-        userId: !student.userId,
-        class: !student.class,
-        department: !student.department,
-        coordinator: !student.coordinator,
-        hod: !student.hod
-      })
+    const student = await Student.findById(studentId)
+    if (!student || !student.coordinator || !student.hod || !student.warden) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields in student info'
+        message: 'Student must have coordinator, HOD and warden assigned before creating outpass'
       })
     }
 
-    console.log('[OUTPASS] Looking up existing student with userId:', student.userId)
-    let existingStudent = await Student.findOne({ user: student.userId })
-
-    if (!existingStudent) {
-      console.log('[OUTPASS] Creating new student record')
-      existingStudent = new Student({
-        user: student.userId,
-        name: student.name,
-        rollNo: student.rollNo,
-        class: student.class,
-        department: student.department,
-        coordinator: student.coordinator,
-        hod: student.hod,
-        year: student.year,
-        phoneNumber: student.phoneNumber,
-        parentInfo: student.parentInfo
-      })
-      console.log('[OUTPASS] Saving new student:', JSON.stringify(existingStudent))
-      await existingStudent.save()
-      console.log('[OUTPASS] New student saved successfully')
-    }
-
-    console.log('[OUTPASS] Creating outpass record')
     const outpass = new Outpass({
       outpassType,
-      student: existingStudent._id,
+      student: studentId,
       destination,
       reason,
       dateOfGoing: new Date(`${dateOfGoing}T${timeOfGoing}`),
@@ -216,134 +174,503 @@ app.post('/api/outpass', async (req, res) => {
       dateOfArrival: new Date(`${dateOfArrival}T${timeOfArrival}`),
       timeOfArrival,
       status: 'Pending',
-      currentApprover: 'warden',
-      wardenApproval: { status: 'Pending', timestamp: new Date() },
-      coordinatorApproval: { status: 'Pending' },
-      hodApproval: { status: 'Pending' }
+      currentApprover: 'coordinator'
     })
 
-    console.log('[OUTPASS] Saving outpass:', JSON.stringify(outpass))
     await outpass.save()
-    console.log('[OUTPASS] Outpass saved successfully')
-
-    res.status(201).json({
-      success: true,
-      message: 'Outpass created successfully',
-      data: outpass
-    })
+    res.status(201).json({ success: true, data: outpass })
   } catch (error) {
-    console.error('[OUTPASS] Error details:', {
-      message: error.message,
-      stack: error.stack,
-      name: error.name
+    res.status(500).json({ success: false, message: error.message })
+  }
+})
+
+app.post('/api/outpass/:outpassId/approve', async (req, res) => {
+  try {
+    const { outpassId } = req.params
+    const { approverRole, status, remarks } = req.body
+
+    const outpass = await Outpass.findById(outpassId)
+    if (!outpass) {
+      return res.status(404).json({ success: false, message: 'Outpass not found' })
+    }
+
+    if (outpass.currentApprover !== approverRole) {
+      return res.status(400).json({ success: false, message: 'Invalid approver for current stage' })
+    }
+
+    outpass[`${approverRole}Approval`] = {
+      status,
+      timestamp: new Date(),
+      remarks
+    }
+
+    if (status === 'Rejected') {
+      outpass.status = 'Rejected'
+    } else if (status === 'Approved' && approverRole === 'hod') {
+      outpass.status = 'Approved'
+      // Generate unique QR codes
+      outpass.qrCode = {
+        exit: crypto.randomBytes(32).toString('hex'),
+        entry: crypto.randomBytes(32).toString('hex')
+      }
+    } else if (status === 'Approved') {
+      if (approverRole === 'coordinator') {
+        outpass.currentApprover = 'warden'
+      } else if (approverRole === 'warden') {
+        outpass.currentApprover = 'hod'
+      }
+    }
+
+    await outpass.save()
+    res.json({ success: true, data: outpass })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+})
+
+app.get('/api/outpass/student/:studentId', async (req, res) => {
+  try {
+    const outpasses = await Outpass.find({ student: req.params.studentId })
+      .populate('student')
+      .sort({ createdAt: -1 })
+    res.json({ success: true, data: outpasses })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+})
+
+app.get('/api/outpass/pending/:approverRole/:approverId', async (req, res) => {
+  try {
+    const { approverRole, approverId } = req.params
+    const outpasses = await Outpass.find({
+      currentApprover: approverRole,
+      status: 'Pending',
+      [`${approverRole}Approval.status`]: 'Pending'
     })
-    console.error('[OUTPASS] Request body at time of error:', JSON.stringify(req.body))
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Error creating outpass'
+    .populate({
+      path: 'student',
+      match: { [approverRole]: approverId }
     })
+    .sort({ createdAt: -1 })
+
+    const filteredOutpasses = outpasses.filter(o => o.student !== null)
+    res.json({ success: true, data: filteredOutpasses })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
   }
 })
 
 app.post('/api/register-email', registerEmail);
 
 app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body;
-  
   try {
-    const user = await User.findOne({ email });
+    const { email, password } = req.body
+
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required' })
+    }
+
+    const user = await User.findOne({ email })
     
     if (!user) {
-      return res.status(401).json({ message: 'Invalid email or password' });
+      return res.status(401).json({ message: 'Invalid email or password' })
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
+    const isMatch = await bcrypt.compare(password, user.password)
+    
     if (!isMatch) {
-      return res.status(401).json({ message: 'Invalid email or password' });
-    }
-
-    let userDetails = {
-      _id: user._id,
-      email: user.email,
-      role: user.role,
-      isVerified: user.isVerified
-    };
-
-    // If user is a student, fetch their details
-    if (user.role === 'student') {
-      const student = await Student.findOne({ user: user._id })
-        .populate('department')
-        .populate('class')
-        .populate('coordinator')
-        .populate('hod');
-
-      if (student) {
-        userDetails = {
-          ...userDetails,
-          departmentId: student.department?._id || null,
-          classId: student.class?._id || null,
-          coordinatorId: student.coordinator?._id || null,
-          hodId: student.hod?._id || null,
-          studentDetails: {
-            name: student.name,
-            rollNo: student.rollNo,
-            year: student.year,
-            phoneNumber: student.phoneNumber
-          }
-        };
-      } else {
-        // Create placeholder student record if not exists
-        const defaultDepartment = await Department.findOne();
-        const defaultClass = await Class.findOne({ department: defaultDepartment?._id });
-        const coordinator = await User.findOne({ role: 'coordinator' });
-        const hod = await User.findOne({ role: 'hod' });
-
-        const newStudent = new Student({
-          user: user._id,
-          name: email.split('@')[0], // Temporary name from email
-          rollNo: 'NOT_ASSIGNED',
-          department: defaultDepartment?._id,
-          class: defaultClass?._id,
-          coordinator: coordinator?._id,
-          hod: hod?._id,
-          year: new Date().getFullYear().toString(),
-          phoneNumber: 'NOT_ASSIGNED'
-        });
-
-        await newStudent.save();
-
-        userDetails = {
-          ...userDetails,
-          departmentId: defaultDepartment?._id || null,
-          classId: defaultClass?._id || null,
-          coordinatorId: coordinator?._id || null,
-          hodId: hod?._id || null,
-          studentDetails: {
-            name: newStudent.name,
-            rollNo: newStudent.rollNo,
-            year: newStudent.year,
-            phoneNumber: newStudent.phoneNumber
-          }
-        };
-      }
+      return res.status(401).json({ message: 'Invalid email or password' })
     }
 
     const token = jwt.sign(
       { id: user._id, email: user.email, role: user.role },
-      process.env.JWT_SECRET || 'fallback_secret',
-      { expiresIn: '1h' }
-    );
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    )
 
-    res.status(200).json({ 
+    const userResponse = {
+      _id: user._id,
+      email: user.email,
+      role: user.role,
+      name: user.name,
+      isVerified: user.isVerified
+    }
+
+    if (user.role === 'student') {
+      const student = await Student.findOne({ user: user._id })
+        .populate('department', 'name')
+        .populate('class', 'name')
+        .populate('coordinator', 'name email')
+        .populate('hod', 'name email')
+        .lean()
+
+      if (student) {
+        userResponse.student = {
+          id: student._id,
+          name: student.name,
+          rollNo: student.rollNo,
+          department: student.department,
+          class: student.class,
+          coordinator: student.coordinator,
+          hod: student.hod,
+          year: student.year,
+          phoneNumber: student.phoneNumber
+        }
+      }
+    }
+
+    res.status(200).json({
       success: true,
       token,
-      user: userDetails
-    });
+      user: userResponse
+    })
+
   } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ message: 'Server error during login' });
+    res.status(500).json({ message: 'Server error during login' })
+  }
+})
+
+// Get HODs
+app.get('/api/staff/hods', async (req, res) => {
+  try {
+    const hodUsers = await User.find({ role: 'hod' })
+      .select('_id email')
+      .lean();
+    
+    const hodsWithNames = hodUsers.map(user => ({
+      _id: user._id,
+      name: user.email.split('@')[0],
+      email: user.email
+    }));
+    
+    res.json(hodsWithNames);
+  } catch (error) {
+    console.error('Error fetching HODs:', error);
+    res.status(500).json({ error: 'Failed to fetch HODs' });
   }
 });
+
+// Get Coordinators
+app.get('/api/staff/coordinators', async (req, res) => {
+  try {
+    const coordinators = await User.find({ role: 'coordinator' })
+      .select('_id email')
+      .lean();
+    
+    const coordinatorsWithNames = coordinators.map(user => ({
+      _id: user._id,
+      name: user.email.split('@')[0],
+      email: user.email
+    }));
+    
+    res.json(coordinatorsWithNames);
+  } catch (error) {
+    console.error('Error fetching coordinators:', error);
+    res.status(500).json({ error: 'Failed to fetch coordinators' });
+  }
+});
+
+// Get Wardens
+app.get('/api/staff/wardens', async (req, res) => {
+  try {
+    const wardens = await User.find({ role: 'warden' })
+      .select('_id email')
+      .lean();
+    
+    const wardensWithNames = wardens.map(user => ({
+      _id: user._id,
+      name: user.email.split('@')[0],
+      email: user.email
+    }));
+    
+    res.json(wardensWithNames);
+  } catch (error) {
+    console.error('Error fetching wardens:', error);
+    res.status(500).json({ error: 'Failed to fetch wardens' });
+  }
+});
+
+// Update student's staff mapping
+app.post('/api/student/update-staff-mapping', async (req, res) => {
+  try {
+    const { studentId, staffType, staffId } = req.body;
+
+    if (!studentId || !staffType || !staffId) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Missing required fields' 
+      });
+    }
+
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Student not found' 
+      });
+    }
+
+    const staff = await User.findById(staffId);
+    if (!staff || staff.role !== staffType) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Invalid staff member' 
+      });
+    }
+
+    student[staffType] = staffId;
+    await student.save();
+
+    res.json({ 
+      success: true,
+      message: 'Staff mapping updated successfully',
+      updatedStudent: student
+    });
+  } catch (error) {
+    console.error('Error updating staff mapping:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error updating staff mapping' 
+    });
+  }
+});
+
+// Security scan QR code endpoint
+app.post('/api/security/scan-qr', async (req, res) => {
+  try {
+    const { qrCode, securityId, scanType } = req.body
+
+    // Verify security guard
+    const security = await User.findOne({ 
+      _id: securityId, 
+      role: 'security' 
+    })
+    if (!security) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Unauthorized security personnel' 
+      })
+    }
+
+    // Find outpass by QR code
+    const outpass = await Outpass.findOne({
+      [`qrCode.${scanType}`]: qrCode,
+      status: scanType === 'exit' ? 'Approved' : 'Active'
+    }).populate('student')
+
+    if (!outpass) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Invalid or expired QR code' 
+      })
+    }
+
+    // Update security checkpoint
+    outpass.securityCheckpoints[`${scanType}Scan`] = {
+      scannedBy: securityId,
+      timestamp: new Date(),
+      status: 'Completed'
+    }
+
+    // Update outpass status
+    if (scanType === 'exit') {
+      outpass.status = 'Active'
+    } else if (scanType === 'entry') {
+      outpass.status = 'Completed'
+    }
+
+    await outpass.save()
+
+    // Create notification for student
+    const notification = new Notification({
+      user: outpass.student.user,
+      title: `Outpass ${scanType} Scan Completed`,
+      message: `Your outpass has been ${scanType === 'exit' ? 'checked out' : 'checked in'} by security at ${new Date().toLocaleString()}`
+    })
+    await notification.save()
+
+    res.json({ 
+      success: true, 
+      message: `${scanType} scan completed successfully`,
+      data: outpass 
+    })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+})
+
+// Get QR code for student
+app.get('/api/outpass/:outpassId/qr-code', async (req, res) => {
+  try {
+    const outpass = await Outpass.findById(req.params.outpassId)
+      .populate('student')
+
+    if (!outpass || outpass.status !== 'Approved') {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'No approved outpass found' 
+      })
+    }
+
+    // Return appropriate QR code based on outpass status
+    const qrCode = outpass.status === 'Approved' ? 
+      outpass.qrCode.exit : 
+      outpass.qrCode.entry
+
+    res.json({ 
+      success: true, 
+      data: { qrCode } 
+    })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+})
+
+app.post('/api/register-student', async (req, res) => {
+  try {
+    const {
+      email,
+      name,
+      rollNo,
+      classId,
+      departmentId,
+      year,
+      phoneNumber,
+      parentInfo
+    } = req.body
+
+    const tempPassword = crypto.randomBytes(8).toString('hex')
+    const salt = await bcrypt.genSalt(12)
+    const hashedPassword = await bcrypt.hash(tempPassword, salt)
+    
+    const existingUser = await User.findOne({ email })
+    if (existingUser) {
+      return res.status(400).json({ message: 'Email already registered' })
+    }
+
+    const newUser = new User({
+      email,
+      password: hashedPassword,
+      role: 'student',
+      isVerified: false,
+      mustChangePassword: true
+    })
+    await newUser.save()
+
+    const studentData = {
+      user: newUser._id,
+      name,
+      rollNo,
+      class: classId,
+      department: departmentId,
+      year,
+      phoneNumber,
+      parentInfo
+    }
+
+    const newStudent = new Student(studentData)
+    await newStudent.save()
+
+    const emailSubject = 'Welcome to Outpass System - Student Registration'
+    const emailText = `Welcome to the Outpass System! Your temporary password is: ${tempPassword}`
+
+    const emailHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background-color: #ffffff; border-radius: 10px; padding: 40px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+      <div style="text-align: center; margin-bottom: 30px;">
+        <h1 style="color: #1a73e8; margin: 0; font-size: 28px;">Welcome to Outpass System</h1>
+      </div>
+      
+      <div style="margin-bottom: 30px;">
+        <p style="font-size: 16px; color: #333; line-height: 1.5;">Your student account has been created. Here are your login credentials:</p>
+        
+        <div style="background-color: #f8f9fa; border-radius: 6px; padding: 20px; margin: 20px 0;">
+          <p style="margin: 0 0 10px 0;"><span style="color: #666;">Email:</span> <strong style="color: #333;">${email}</strong></p>
+          <p style="margin: 0;"><span style="color: #666;">Temporary Password:</span> <strong style="color: #333;">${tempPassword}</strong></p>
+        </div>
+      </div>
+
+      <div style="margin-top: 30px;">
+        <p style="color: #666; font-size: 14px; margin: 0;">Please login and change your password.</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`
+
+    await sendEmail(email, emailSubject, emailText, emailHtml)
+
+    return res.status(201).json({
+      message: 'Student registered successfully',
+      student: {
+        id: newStudent._id,
+        userId: newUser._id,
+        name,
+        email,
+        rollNo,
+        year,
+        phoneNumber
+      }
+    })
+  } catch (error) {
+    console.error('Error registering student:', error)
+    return res.status(500).json({ message: 'Error registering student' })
+  }
+})
+
+app.post('/api/student/complete-profile', async (req, res) => {
+  try {
+    const {
+      userId,
+      name,
+      rollNo,
+      department,
+      class: classId,
+      year,
+      phoneNumber,
+      parentInfo,
+      hodId,
+      wardenId,
+      coordinatorId
+    } = req.body
+
+    const studentData = {
+      user: userId,
+      name,
+      rollNo,
+      department,
+      class: classId,
+      year,
+      phoneNumber,
+      parentInfo,
+      hod: hodId,
+      warden: wardenId,
+      coordinator: coordinatorId
+    }
+
+    const student = new Student(studentData)
+    await student.save()
+
+    res.status(201).json({
+      success: true,
+      message: 'Profile completed successfully',
+      student
+    })
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error completing profile',
+      error: error.message
+    })
+  }
+})
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

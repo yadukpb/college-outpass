@@ -28,6 +28,7 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
   try {
     return await bcrypt.compare(candidatePassword, this.password);
   } catch (error) {
+    
     throw error;
   }
 };
@@ -50,8 +51,8 @@ const studentSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   name: { type: String, required: true },
   rollNo: { type: String, required: true },
-  class: { type: mongoose.Schema.Types.ObjectId, ref: 'Class', required: true },
-  department: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', required: true },
+  class: { type: mongoose.Schema.Types.ObjectId, ref: 'Class', required: false },
+  department: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', required: false },
   warden: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false },
   coordinator: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   hod: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
@@ -71,8 +72,15 @@ const studentSchema = new mongoose.Schema({
 const staffSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   name: { type: String, required: true },
-  department: { type: mongoose.Schema.Types.ObjectId, ref: 'Department' },
-  class: { type: mongoose.Schema.Types.ObjectId, ref: 'Class' }
+  staffId: { type: String, required: true, unique: true },
+  department: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', required: true },
+  class: { type: mongoose.Schema.Types.ObjectId, ref: 'Class' },
+  phoneNumber: { type: String, required: true },
+  email: { type: String, required: true },
+  designation: { type: String, required: true },
+  isActive: { type: Boolean, default: true },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
 });
 
 // Outpass Schema
@@ -85,21 +93,51 @@ const outpassSchema = new mongoose.Schema({
   timeOfGoing: { type: String, required: true },
   dateOfArrival: { type: Date, required: true },
   timeOfArrival: { type: String, required: true },
-  status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
-  currentApprover: { type: String, enum: ['warden', 'coordinator', 'hod'], default: 'warden' },
-  wardenApproval: {
-    status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
-    timestamp: Date
+  status: { 
+    type: String, 
+    enum: ['Pending', 'Approved', 'Rejected', 'Active', 'Completed'], 
+    default: 'Pending' 
   },
+  securityCheckpoints: {
+    exitScan: {
+      scannedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      timestamp: Date,
+      status: { 
+        type: String, 
+        enum: ['Pending', 'Completed'], 
+        default: 'Pending' 
+      }
+    },
+    entryScan: {
+      scannedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      timestamp: Date,
+      status: { 
+        type: String, 
+        enum: ['Pending', 'Completed'], 
+        default: 'Pending' 
+      }
+    }
+  },
+  qrCode: {
+    exit: String,  // Store unique QR code for exit
+    entry: String  // Store unique QR code for entry
+  },
+  currentApprover: { type: String, enum: ['coordinator', 'warden', 'hod'], default: 'coordinator' },
   coordinatorApproval: {
     status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
-    timestamp: Date
+    timestamp: Date,
+    remarks: String
+  },
+  wardenApproval: {
+    status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
+    timestamp: Date,
+    remarks: String
   },
   hodApproval: {
     status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
-    timestamp: Date
+    timestamp: Date,
+    remarks: String
   },
-  chat: { type: mongoose.Schema.Types.ObjectId, ref: 'Chat' },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
