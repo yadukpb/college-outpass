@@ -748,6 +748,56 @@ app.get('/api/outpass/latest/:userId', async (req, res) => {
   }
 });
 
+app.put('/api/student/update-profile/:studentId', async (req, res) => {
+  try {
+    const { studentId } = req.params
+    const {
+      name,
+      rollNo,
+      year,
+      phoneNumber,
+      parentInfo,
+      hodId,
+      wardenId,
+      coordinatorId
+    } = req.body
+
+    const updatedStudent = await Student.findByIdAndUpdate(
+      studentId,
+      {
+        name,
+        rollNo,
+        year,
+        phoneNumber,
+        parentInfo,
+        hod: hodId,
+        warden: wardenId,
+        coordinator: coordinatorId
+      },
+      { new: true }
+    )
+
+    if (!updatedStudent) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found'
+      })
+    }
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      student: updatedStudent
+    })
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error updating profile',
+      error: error.message
+    })
+  }
+})
+
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 }).on('error', (error) => {
