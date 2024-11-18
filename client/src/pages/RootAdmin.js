@@ -507,6 +507,14 @@ const RootAdminDashboard = () => {
     }
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('token')
+    localStorage.removeItem('userId')
+    localStorage.removeItem('userRole')
+    localStorage.removeItem('userEmail')
+    window.location.href = '/login'
+  }
+
   const drawer = (
     <Box sx={{ mt: isMobile ? 2 : 8, p: 2 }}>
       <List>
@@ -1058,7 +1066,7 @@ const RootAdminDashboard = () => {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+      <Box sx={{ display: 'flex', bgcolor: 'background.default', minHeight: '100vh' }}>
         <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1, bgcolor: '#FFFFFF' }}>
           <Toolbar>
             <IconButton
@@ -1105,7 +1113,7 @@ const RootAdminDashboard = () => {
                 <PersonIcon sx={{ mr: 1 }} />
                 Profile
               </MenuItem>
-              <MenuItem onClick={handleClose}>
+              <MenuItem onClick={handleLogout}>
                 <ExitToAppIcon sx={{ mr: 1 }} />
                 Logout
               </MenuItem>

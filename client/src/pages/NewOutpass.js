@@ -92,6 +92,7 @@ const NewOutpass = () => {
     const classId = localStorage.getItem('classId');
     const coordinatorId = localStorage.getItem('coordinatorId');
     const hodId = localStorage.getItem('hodId');
+    const studentId = localStorage.getItem('studentId');
 
     console.log("Local Storage Items:", {
       userId,
@@ -115,6 +116,7 @@ const NewOutpass = () => {
       timeOfGoing: formData.timeOfLeaving,
       dateOfArrival: formData.dateOfReturn,
       timeOfArrival: formData.timeOfReturn,
+      studentId: studentId,
       student: {
         userId: userId,
         name: formData.personalInfo.name,

@@ -97,21 +97,16 @@ const OutpassSystem = () => {
         localStorage.setItem('userEmail', user.email);
 
         if (user.role === 'student') {
-          localStorage.setItem('departmentId', user.departmentId || 'NOT_ASSIGNED');
-          localStorage.setItem('classId', user.classId || 'NOT_ASSIGNED');
-          localStorage.setItem('coordinatorId', user.coordinatorId || 'NOT_ASSIGNED');
-          localStorage.setItem('hodId', user.hodId || 'NOT_ASSIGNED');
-          
-          if (user.studentDetails) {
-            localStorage.setItem('studentName', user.studentDetails.name);
-            localStorage.setItem('studentRollNo', user.studentDetails.rollNo);
-            localStorage.setItem('studentYear', user.studentDetails.year);
-            localStorage.setItem('studentPhone', user.studentDetails.phoneNumber);
-          }
+          navigate('/student-dashboard');
+        } else if (user.role === 'coordinator') {
+          navigate('/coordinator-dashboard');
+        } else if (user.role === 'hod') {
+          navigate('/hod-dashboard');
+        } else if (user.role === 'warden') {
+          navigate('/warden-dashboard');
         }
 
         axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        navigate('/student-dashboard');
       }
     } catch (error) {
       if (error.response) {

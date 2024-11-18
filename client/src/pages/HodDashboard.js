@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ThemeProvider, createTheme, useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import CssBaseline from '@mui/material/CssBaseline';
@@ -85,6 +85,78 @@ const HodDashboard = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
   const [currentView, setCurrentView] = useState('dashboard');
+  const [outpassRequests, setOutpassRequests] = useState([]);
+
+  const fetchOutpassRequests = async () => {
+    try {
+      const hodId = localStorage.getItem('userId');
+      const response = await fetch(`http://localhost:5001/api/outpass/pending/hod/${hodId}`);
+      const data = await response.json();
+      if (data.success) {
+        setOutpassRequests(data.data.map(request => ({
+          id: request._id,
+          studentName: request.student.name,
+          destination: request.destination,
+          dateOfGoing: new Date(request.dateOfGoing).toLocaleString(),
+          dateOfArrival: new Date(request.dateOfArrival).toLocaleString(),
+          status: request.hodApproval.status,
+          reason: request.reason
+        })));
+      }
+    } catch (error) {
+      console.error('Error fetching outpass requests:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchOutpassRequests();
+  }, []);
+
+  const handleApprove = async (requestId) => {
+    try {
+      const response = await fetch(`http://localhost:5001/api/outpass/${requestId}/hod-approve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: 'Approved',
+          remarks: 'Approved by HOD'
+        }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        setOutpassRequests(prevRequests => 
+          prevRequests.filter(request => request.id !== requestId)
+        );
+      }
+    } catch (error) {
+      console.error('Error approving outpass:', error);
+    }
+  };
+
+  const handleReject = async (requestId) => {
+    try {
+      const response = await fetch(`http://localhost:5001/api/outpass/${requestId}/hod-approve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: 'Rejected',
+          remarks: 'Rejected by HOD'
+        }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        setOutpassRequests(prevRequests => 
+          prevRequests.filter(request => request.id !== requestId)
+        );
+      }
+    } catch (error) {
+      console.error('Error rejecting outpass:', error);
+    }
+  };
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -102,6 +174,14 @@ const HodDashboard = () => {
     setCurrentView(view);
     setMobileOpen(false);
   };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token')
+    localStorage.removeItem('userId')
+    localStorage.removeItem('userRole')
+    localStorage.removeItem('userEmail')
+    window.location.href = '/login'
+  }
 
   const drawer = (
     <Box sx={{ mt: isMobile ? 2 : 8, p: 2 }}>
@@ -134,54 +214,16 @@ const HodDashboard = () => {
     </Box>
   );
 
-  const outpassRequests = [
-    { id: 1, studentName: 'Ananthu', destination: 'Home', dateOfGoing: '2024-10-15', dateOfArrival: '2024-10-17', status: 'Pending' },
-    { id: 2, studentName: 'Anandhu', destination: 'Library', dateOfGoing: '2024-10-11', dateOfArrival: '2024-10-11', status: 'Pending' },
-    { id: 3, studentName: 'Yadu', destination: 'City XYZ', dateOfGoing: '2024-10-20', dateOfArrival: '2024-10-22', status: 'Pending' },
-    { id: 4, studentName: 'Rahul', destination: 'Sports Event', dateOfGoing: '2024-10-18', dateOfArrival: '2024-10-19', status: 'Pending' },
-    { id: 5, studentName: 'Shiraz', destination: 'Medical Appointment', dateOfGoing: '2024-10-25', dateOfArrival: '2024-10-25', status: 'Pending' },
-  ];
-
   const renderDashboard = () => (
     <>
       <Typography variant="h4" sx={{ mb: 4, fontWeight: 'bold', color: '#1A2027' }}>
         Welcome, HOD!
       </Typography>
       <Grid container spacing={3}>
-        <Grid item xs={12} md={4}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>Pending Approvals</Typography>
-              <Typography variant="h3" sx={{ fontWeight: 'bold', color: theme.palette.warning.main }}>
-                {outpassRequests.filter(request => request.status === 'Pending').length}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={4}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>Approved Today</Typography>
-              <Typography variant="h3" sx={{ fontWeight: 'bold', color: theme.palette.success.main }}>
-                3
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={4}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>Rejected Today</Typography>
-              <Typography variant="h3" sx={{ fontWeight: 'bold', color: theme.palette.error.main }}>
-                1
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
         <Grid item xs={12}>
           <Card>
             <CardContent>
-              <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>Recent Outpass Requests</Typography>
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>Pending Outpass Requests</Typography>
               <TableContainer>
                 <Table>
                   <TableHead>
@@ -209,10 +251,21 @@ const HodDashboard = () => {
                           />
                         </TableCell>
                         <TableCell>
-                          <Button variant="contained" color="primary" size="small" sx={{ mr: 1 }}>
+                          <Button 
+                            variant="contained" 
+                            color="primary" 
+                            size="small" 
+                            sx={{ mr: 1 }}
+                            onClick={() => handleApprove(request.id)}
+                          >
                             Approve
                           </Button>
-                          <Button variant="outlined" color="error" size="small">
+                          <Button 
+                            variant="outlined" 
+                            color="error" 
+                            size="small"
+                            onClick={() => handleReject(request.id)}
+                          >
                             Reject
                           </Button>
                         </TableCell>
@@ -254,10 +307,21 @@ const HodDashboard = () => {
                     <TableCell>{request.dateOfGoing}</TableCell>
                     <TableCell>{request.dateOfArrival}</TableCell>
                     <TableCell>
-                      <Button variant="contained" color="primary" size="small" sx={{ mr: 1 }}>
+                      <Button 
+                        variant="contained" 
+                        color="primary" 
+                        size="small" 
+                        sx={{ mr: 1 }}
+                        onClick={() => handleApprove(request.id)}
+                      >
                         Approve
                       </Button>
-                      <Button variant="outlined" color="error" size="small">
+                      <Button 
+                        variant="outlined" 
+                        color="error" 
+                        size="small"
+                        onClick={() => handleReject(request.id)}
+                      >
                         Reject
                       </Button>
                     </TableCell>
@@ -391,8 +455,8 @@ const HodDashboard = () => {
               open={Boolean(anchorEl)}
               onClose={handleClose}
             >
-              <MenuItem onClick={handleClose}>Profile</MenuItem>
-              <MenuItem onClick={handleClose}>
+              <MenuItem onClick={() => handleViewChange('profile')}>Profile</MenuItem>
+              <MenuItem onClick={handleLogout}>
                 <ExitToAppIcon sx={{ mr: 1 }} />
                 Logout
               </MenuItem>

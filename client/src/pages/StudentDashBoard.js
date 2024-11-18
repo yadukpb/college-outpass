@@ -162,26 +162,23 @@ const Profile = () => {
 
   useEffect(() => {
     fetchAllData()
+    fetchProfileData()
   }, [])
 
   const fetchAllData = async () => {
     try {
-      const [deptRes, classRes, hodsRes, wardensRes, coordsRes] = await Promise.all([
-        axios.get('http://localhost:5001/api/departments'),
-        axios.get('http://localhost:5001/api/classes'),
+      const [ hodsRes, wardensRes, coordsRes] = await Promise.all([
+       
         axios.get('http://localhost:5001/api/staff/hods'),
         axios.get('http://localhost:5001/api/staff/wardens'),
         axios.get('http://localhost:5001/api/staff/coordinators')
       ])
       
-      console.log('Raw Data:', {
-        hods: hodsRes.data,
-        wardens: wardensRes.data,
-        coordinators: coordsRes.data
-      })
+      console.log('HODs:', hodsRes.data)
+      console.log('Wardens:', wardensRes.data)
+      console.log('Coordinators:', coordsRes.data)
 
-      setDepartments(deptRes.data?.departments || [])
-      setClasses(classRes.data?.classes || [])
+      
       setHods(hodsRes.data || [])
       setWardens(wardensRes.data || [])
       setCoordinators(coordsRes.data || [])
@@ -192,6 +189,19 @@ const Profile = () => {
       setLoading(false)
     }
   }
+
+  const fetchProfileData = async () => {
+    try {
+      const userId = localStorage.getItem('userId');
+      const response = await axios.get(`http://localhost:5001/api/student/profile/${userId}`);
+      if (response.data.success) {
+        setFormData(response.data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching profile data:', error);
+      setError('Failed to fetch profile data');
+    }
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
@@ -227,8 +237,7 @@ const Profile = () => {
         hodId: formData.hodId,
         wardenId: formData.wardenId,
         coordinatorId: formData.coordinatorId,
-        department: formData.departmentId,
-        class: formData.classId
+        
       }
 
       const response = await axios.post('http://localhost:5001/api/student/complete-profile', dataToSubmit)
@@ -417,11 +426,15 @@ const Profile = () => {
                 label="Warden"
                 required
               >
-                {wardens && wardens.length > 0 && wardens.map(warden => (
-                  <MenuItem key={warden._id} value={warden._id}>
-                    {warden.name}
-                  </MenuItem>
-                ))}
+                {wardens.length > 0 ? (
+                  wardens.map(warden => (
+                    <MenuItem key={warden._id} value={warden._id}>
+                      {warden.name}
+                    </MenuItem>
+                  ))
+                ) : (
+                  <MenuItem disabled>No Wardens available</MenuItem>
+                )}
               </Select>
             </FormControl>
           </Grid>
@@ -435,11 +448,15 @@ const Profile = () => {
                 label="Coordinator"
                 required
               >
-                {coordinators && coordinators.length > 0 && coordinators.map(coordinator => (
-                  <MenuItem key={coordinator._id} value={coordinator._id}>
-                    {coordinator.name}
-                  </MenuItem>
-                ))}
+                {coordinators.length > 0 ? (
+                  coordinators.map(coordinator => (
+                    <MenuItem key={coordinator._id} value={coordinator._id}>
+                      {coordinator.name}
+                    </MenuItem>
+                  ))
+                ) : (
+                  <MenuItem disabled>No Coordinators available</MenuItem>
+                )}
               </Select>
             </FormControl>
           </Grid>
@@ -518,16 +535,21 @@ const RippleChip = ({ label, color }) => {
 };
 
 const RecentOutpassStatus = ({ outpass }) => {
-  const qrCodeData = JSON.stringify({
-    id: outpass.id,
-    studentId: outpass.studentId,
-    destination: outpass.destination,
-    dateOfGoing: outpass.dateOfGoing,
-    timeOfGoing: outpass.timeOfGoing,
-    dateOfArrival: outpass.dateOfArrival,
-    timeOfArrival: outpass.timeOfArrival,
-    type: 'outpass',
-  });
+  const getStepNumber = (status) => {
+    switch (status) {
+      case 'Pending':
+        return 0;
+      case 'Approved':
+        if (outpass.hodApproval?.status === 'Approved') return 4;
+        if (outpass.wardenApproval?.status === 'Approved') return 3;
+        if (outpass.coordinatorApproval?.status === 'Approved') return 2;
+        return 1;
+      case 'Rejected':
+        return 0;
+      default:
+        return 0;
+    }
+  };
 
   return (
     <Card sx={{ mt: 3 }}>
@@ -536,7 +558,9 @@ const RecentOutpassStatus = ({ outpass }) => {
         <Grid container spacing={2}>
           <Grid item xs={12} sm={6}>
             <Typography variant="body2" color="text.secondary">Going Out Date:</Typography>
-            <Typography variant="body1" fontWeight="bold">{outpass.dateOfGoing}</Typography>
+            <Typography variant="body1" fontWeight="bold">
+              {new Date(outpass.dateOfGoing).toLocaleDateString()}
+            </Typography>
           </Grid>
           <Grid item xs={12} sm={6}>
             <Typography variant="body2" color="text.secondary">Going Out Time:</Typography>
@@ -547,55 +571,27 @@ const RecentOutpassStatus = ({ outpass }) => {
         <Grid container spacing={2}>
           <Grid item xs={12} sm={6}>
             <Typography variant="body2" color="text.secondary">Coming Back Date:</Typography>
-            <Typography variant="body1" fontWeight="bold">{outpass.dateOfArrival}</Typography>
+            <Typography variant="body1" fontWeight="bold">
+              {new Date(outpass.dateOfArrival).toLocaleDateString()}
+            </Typography>
           </Grid>
           <Grid item xs={12} sm={6}>
             <Typography variant="body2" color="text.secondary">Coming Back Time:</Typography>
             <Typography variant="body1" fontWeight="bold">{outpass.timeOfArrival}</Typography>
           </Grid>
         </Grid>
-        <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
-          <Box>
-            <Typography variant="body2" color="text.secondary" align="center">QR Code:</Typography>
-            <QRCodeSVG value={qrCodeData} size={128} />
+        {outpass.qrCode && (
+          <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-around' }}>
+            <Box>
+              <Typography variant="body2" color="text.secondary" align="center">Exit QR Code:</Typography>
+              <QRCodeSVG value={outpass.qrCode.exit} size={128} />
+            </Box>
+            <Box>
+              <Typography variant="body2" color="text.secondary" align="center">Entry QR Code:</Typography>
+              <QRCodeSVG value={outpass.qrCode.entry} size={128} />
+            </Box>
           </Box>
-        </Box>
-        <Box sx={{ mt: 3 }}>
-          <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>Approval Progress</Typography>
-          <Stepper activeStep={outpass.activeStep} alternativeLabel>
-            {['Warden', 'Coordinator', 'HOD', 'Final Approval'].map((label, index) => (
-              <Step key={label}>
-                <StepLabel StepIconProps={{
-                  sx: {
-                    color: outpass.activeStep >= index ? 'success.main' : 'inherit',
-                    '& .MuiStepIcon-text': {
-                      fill: outpass.activeStep >= index ? 'white' : 'inherit',
-                    },
-                  }
-                }}>{label}</StepLabel>
-              </Step>
-            ))}
-          </Stepper>
-        </Box>
-        <Box sx={{ mt: 2 }}>
-          <PDFDownloadLink document={<OutpassPDF outpass={outpass} />} fileName="approved_outpass.pdf">
-            {({ blob, url, loading, error }) => (
-              <Button
-                variant="contained"
-                color="primary"
-                startIcon={<DownloadIcon />}
-                disabled={loading}
-                fullWidth
-                sx={{
-                  fontSize: { xs: '1rem', sm: '1.2rem' },
-                  padding: { xs: '10px', sm: '12px 24px' },
-                }}
-              >
-                {loading ? 'Generating Outpass...' : 'Download Outpass'}
-              </Button>
-            )}
-          </PDFDownloadLink>
-        </Box>
+        )}
       </CardContent>
     </Card>
   );
@@ -607,6 +603,8 @@ const StudentDashboard = () => {
   const [anchorEl, setAnchorEl] = useState(null);
   const [currentView, setCurrentView] = useState('dashboard');
   const [approvedOutpass, setApprovedOutpass] = useState(null);
+  const [latestOutpass, setLatestOutpass] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   const outpassData = {
     id: '12345',
@@ -625,6 +623,33 @@ const StudentDashboard = () => {
     setApprovedOutpass(outpassData);
   }, []);
 
+  useEffect(() => {
+    const fetchLatestOutpass = async () => {
+      try {
+        // First get the student profile using userId
+        const userId = localStorage.getItem('userId');
+        const studentResponse = await axios.get(`http://localhost:5001/api/student/profile/${userId}`);
+        
+        if (studentResponse.data.success) {
+          // Now use the student._id to fetch the latest outpass
+          const studentId = studentResponse.data.data._id;
+          localStorage.setItem('studentId', studentId); // Store for future use
+          
+          const outpassResponse = await axios.get(`http://localhost:5001/api/outpass/latest/${studentId}`);
+          if (outpassResponse.data.success) {
+            setLatestOutpass(outpassResponse.data.data);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching latest outpass:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLatestOutpass();
+  }, []);
+
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
   };
@@ -641,6 +666,15 @@ const StudentDashboard = () => {
     setCurrentView(view);
     setMobileOpen(false);
   };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token')
+    localStorage.removeItem('userId')
+    localStorage.removeItem('userRole')
+    localStorage.removeItem('userEmail')
+    localStorage.removeItem('studentId')
+    window.location.href = '/login'
+  }
 
   const drawer = (
     <Box sx={{ mt: isMobile ? 2 : 8, p: 2 }}>
@@ -677,19 +711,42 @@ const StudentDashboard = () => {
   const outpassSteps = ['Request Submitted', 'Warden Approval', 'Coordinator Approval', 'HOD Approval', 'Approved'];
   const activeStep = 3; // HOD Approval is pending
 
-  const outpassHistory = [
-    { id: 1, destination: 'Home', dateOfGoing: '2024-10-15', timeOfGoing: '09:00 AM', dateOfArrival: '2024-10-17', timeOfArrival: '06:00 PM', status: 'Approved' },
-    { id: 2, destination: 'Library', dateOfGoing: '2024-10-11', timeOfGoing: '10:00 AM', dateOfArrival: '2024-10-11', timeOfArrival: '05:00 PM', status: 'Approved' },
-    { id: 3, destination: 'City XYZ', dateOfGoing: '2024-10-20', timeOfGoing: '08:00 AM', dateOfArrival: '2024-10-22', timeOfArrival: '07:00 PM', status: 'Pending' },
-    { id: 4, destination: 'Gym', dateOfGoing: '2024-10-08', timeOfGoing: '06:00 AM', dateOfArrival: '2024-10-08', timeOfArrival: '08:00 AM', status: 'Rejected' },
-    { id: 5, destination: 'Cafeteria', dateOfGoing: '2024-10-09', timeOfGoing: '12:00 PM', dateOfArrival: '2024-10-09', timeOfArrival: '01:00 PM', status: 'Approved' },
-  ];
+  const fetchOutpassHistory = async () => {
+    try {
+      const studentId = localStorage.getItem('studentId');
+      if (!studentId) {
+        const userId = localStorage.getItem('userId');
+        const profileResponse = await axios.get(`http://localhost:5001/api/student/profile/${userId}`);
+        if (profileResponse.data.success) {
+          localStorage.setItem('studentId', profileResponse.data.data._id);
+          const response = await axios.get(`http://localhost:5001/api/outpass/student/${profileResponse.data.data._id}`);
+          return response.data.data;
+        }
+      } else {
+        const response = await axios.get(`http://localhost:5001/api/outpass/student/${studentId}`);
+        return response.data.data;
+      }
+    } catch (error) {
+      console.error('Error fetching outpass history:', error);
+      return [];
+    }
+  };
+
+  useEffect(() => {
+    const fetchData = async () => {
+      const history = await fetchOutpassHistory();
+      setOutpassHistory(history);
+    };
+    fetchData();
+  }, []);
+
+  const [outpassHistoryData, setOutpassHistory] = useState([]);
 
   const renderDashboard = () => (
     <>
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#1A2027', mb: 2 }}>
-          Welcome back, Ananthu!
+          Welcome back!
         </Typography>
         <Button
           variant="contained"
@@ -712,9 +769,9 @@ const StudentDashboard = () => {
         </Button>
       </Box>
       <Grid container spacing={3}>
-        {approvedOutpass && approvedOutpass.hodApproved && (
+        {latestOutpass && (
           <Grid item xs={12}>
-            <RecentOutpassStatus outpass={approvedOutpass} />
+            <RecentOutpassStatus outpass={latestOutpass} />
           </Grid>
         )}
         <Grid item xs={12}>
@@ -835,7 +892,7 @@ const StudentDashboard = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {outpassHistory.map((row, index) => (
+              {outpassHistoryData.map((row, index) => (
                 <TableRow
                   key={row.id}
                   sx={{ 
@@ -947,8 +1004,8 @@ const StudentDashboard = () => {
               open={Boolean(anchorEl)}
               onClose={handleClose}
             >
-              <MenuItem onClick={handleClose}>Profile</MenuItem>
-              <MenuItem onClick={handleClose}>
+              <MenuItem onClick={() => handleViewChange('profile')}>Profile</MenuItem>
+              <MenuItem onClick={handleLogout}>
                 <ExitToAppIcon sx={{ mr: 1 }} />
                 Logout
               </MenuItem>

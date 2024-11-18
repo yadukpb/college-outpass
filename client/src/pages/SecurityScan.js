@@ -1,151 +1,150 @@
-import React, { useState } from 'react';
-import { Box, Typography, Paper, Snackbar, List, ListItem, ListItemText, Avatar, Chip, ThemeProvider, createTheme, CssBaseline, AppBar, Toolbar, IconButton, Container, Grid, Fade } from '@mui/material';
-import { QrCodeScanner as QrCodeScannerIcon, ArrowBack as ArrowBackIcon, Security as SecurityIcon } from '@mui/icons-material';
-import QrScanner from 'react-qr-scanner';
+import React, { useState } from 'react'
+import { Box, Typography, Paper, Snackbar, Alert, List, ListItem, ListItemText, Avatar, Chip, ThemeProvider, createTheme, CssBaseline, AppBar, Toolbar, IconButton, Container, Grid, Fade, Button } from '@mui/material'
+import { QrCodeScanner as QrCodeScannerIcon, ArrowBack as ArrowBackIcon, Security as SecurityIcon, CheckCircle as CheckCircleIcon, Cancel as CancelIcon } from '@mui/icons-material'
+import QrScanner from 'react-qr-scanner'
+import axios from 'axios'
 
 const theme = createTheme({
   palette: {
-    primary: {
-      main: '#2196f3',
-    },
-    secondary: {
-      main: '#f50057',
-    },
-    background: {
-      default: '#f0f2f5',
-    },
-  },
-  typography: {
-    fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
-    h6: {
-      fontWeight: 600,
-    },
-  },
-  components: {
-    MuiPaper: {
-      styleOverrides: {
-        root: {
-          boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-        },
-      },
-    },
-    MuiListItem: {
-      styleOverrides: {
-        root: {
-          transition: 'background-color 0.3s',
-          '&:hover': {
-            backgroundColor: 'rgba(0, 0, 0, 0.04)',
-          },
-        },
-      },
-    },
-  },
-});
+    primary: { main: '#1a73e8' },
+    secondary: { main: '#e94235' },
+    success: { main: '#0f9d58' },
+    background: { default: '#f5f5f5' }
+  }
+})
 
 const SecurityScan = () => {
-  const [scanResult, setScanResult] = useState(null);
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
-  const [outpasses, setOutpasses] = useState({});
-  const [scanning, setScanning] = useState(false);
+  const [scanResult, setScanResult] = useState(null)
+  const [alert, setAlert] = useState({ open: false, message: '', severity: 'info' })
+  const [scans, setScans] = useState([])
+  const [scanning, setScanning] = useState(false)
 
-  const handleScan = (data) => {
-    if (data) {
-      try {
-        const outpassData = JSON.parse(data.text);
-        if (outpassData.type === 'outpass') {
-          const currentTime = new Date().toLocaleTimeString();
-          const updatedOutpasses = {
-            ...outpasses,
-            [outpassData.id]: { ...outpassData, status: 'outside', timeOfLeaving: currentTime }
-          };
-          setOutpasses(updatedOutpasses);
-          setScanResult(updatedOutpasses[outpassData.id]);
-          setSnackbarMessage(`Outpass for ${outpassData.studentId} updated successfully`);
-          setSnackbarOpen(true);
-        }
-      } catch (error) {
-        console.error('Error processing QR code:', error);
-        setSnackbarMessage('Invalid QR code');
-        setSnackbarOpen(true);
+  const handleScan = async (data) => {
+    if (!data) return
+
+    try {
+      const response = await axios.post('/api/security/scan-qr', {
+        qrCode: data.text,
+        securityId: localStorage.getItem('userId'),
+        scanType: 'exit'
+      })
+
+      const { success, message, data: outpassData } = response.data
+
+      if (success) {
+        setScanResult(outpassData)
+        setScans(prev => [outpassData, ...prev])
+        setAlert({
+          open: true,
+          message: `Successfully scanned outpass for ${outpassData.student.name}`,
+          severity: 'success'
+        })
+      } else {
+        setAlert({
+          open: true,
+          message: message || 'Invalid QR code',
+          severity: 'error'
+        })
       }
+    } catch (error) {
+      setAlert({
+        open: true,
+        message: error.response?.data?.message || 'Error processing scan',
+        severity: 'error'
+      })
     }
-  };
+  }
 
   const handleError = (error) => {
-    console.error(error);
-    setSnackbarMessage('Error scanning QR code');
-    setSnackbarOpen(true);
-  };
-
-  const toggleScanner = () => {
-    setScanning(!scanning);
-  };
+    setAlert({
+      open: true,
+      message: 'Error accessing camera',
+      severity: 'error'
+    })
+  }
 
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Box sx={{ flexGrow: 1, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-        <AppBar position="static" elevation={0}>
+      <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+        <AppBar position="static" elevation={2}>
           <Toolbar>
-            <IconButton edge="start" color="inherit" aria-label="back" sx={{ mr: 2 }}>
+            <IconButton edge="start" color="inherit" sx={{ mr: 2 }}>
               <ArrowBackIcon />
             </IconButton>
-            <Typography variant="h6" component="div" sx={{ flexGrow: 1, display: 'flex', alignItems: 'center' }}>
-              <SecurityIcon sx={{ mr: 1 }} /> Security Scan
+            <SecurityIcon sx={{ mr: 1 }} />
+            <Typography variant="h6" sx={{ flexGrow: 1 }}>
+              Security Checkpoint
             </Typography>
-            <IconButton color="inherit" onClick={toggleScanner}>
-              <QrCodeScannerIcon />
-            </IconButton>
+            <Button
+              variant="contained"
+              color="secondary"
+              startIcon={<QrCodeScannerIcon />}
+              onClick={() => setScanning(!scanning)}
+              sx={{ bgcolor: 'white', color: 'primary.main', '&:hover': { bgcolor: 'grey.100' } }}
+            >
+              {scanning ? 'Stop Scan' : 'Start Scan'}
+            </Button>
           </Toolbar>
         </AppBar>
-        <Container maxWidth="md" sx={{ mt: 4, mb: 4, flexGrow: 1 }}>
+
+        <Container maxWidth="md" sx={{ py: 4, flexGrow: 1 }}>
           <Grid container spacing={3}>
-            <Grid item xs={12}>
-              <Fade in={scanning}>
-                <Paper elevation={3} sx={{ p: 2, borderRadius: 2, overflow: 'hidden', display: scanning ? 'block' : 'none' }}>
+            {scanning && (
+              <Grid item xs={12}>
+                <Paper elevation={3} sx={{ p: 3, borderRadius: 2, bgcolor: 'grey.900' }}>
                   <QrScanner
                     delay={300}
                     onError={handleError}
                     onScan={handleScan}
-                    style={{ width: '100%', height: 'auto' }}
+                    style={{ width: '100%', borderRadius: 8 }}
+                    constraints={{ facingMode: 'environment' }}
                   />
                 </Paper>
-              </Fade>
-            </Grid>
-            {scanResult && (
-              <Grid item xs={12}>
-                <Fade in={true}>
-                  <Paper elevation={2} sx={{ p: 3, borderRadius: 2, bgcolor: theme.palette.primary.light }}>
-                    <Typography variant="h6" gutterBottom color="primary.contrastText">
-                      Last Scan Result
-                    </Typography>
-                    <Typography variant="body1" color="primary.contrastText">
-                      Student {scanResult.studentId} marked as outside campus at {scanResult.timeOfLeaving}
-                    </Typography>
-                  </Paper>
-                </Fade>
               </Grid>
             )}
+
+            {scanResult && (
+              <Grid item xs={12}>
+                <Paper elevation={3} sx={{ p: 3, borderRadius: 2, bgcolor: scanResult.status === 'Active' ? 'success.light' : 'error.light' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                    {scanResult.status === 'Active' ? 
+                      <CheckCircleIcon color="success" sx={{ fontSize: 40, mr: 2 }} /> :
+                      <CancelIcon color="error" sx={{ fontSize: 40, mr: 2 }} />
+                    }
+                    <Typography variant="h6" color="text.primary">
+                      {scanResult.status === 'Active' ? 'Valid Outpass' : 'Invalid Outpass'}
+                    </Typography>
+                  </Box>
+                  <Typography variant="body1">
+                    Student: {scanResult.student?.name}<br />
+                    Destination: {scanResult.destination}<br />
+                    Time: {new Date().toLocaleTimeString()}
+                  </Typography>
+                </Paper>
+              </Grid>
+            )}
+
             <Grid item xs={12}>
               <Paper elevation={2} sx={{ borderRadius: 2 }}>
-                <List sx={{ width: '100%', bgcolor: 'background.paper' }}>
-                  <Typography variant="h6" sx={{ p: 2, pb: 1, borderBottom: `1px solid ${theme.palette.divider}` }}>Recent Scans</Typography>
-                  {Object.values(outpasses).map((outpass, index) => (
-                    <ListItem key={index} alignItems="flex-start" divider={index !== Object.values(outpasses).length - 1}>
-                      <Avatar sx={{ bgcolor: theme.palette.secondary.main, mr: 2 }}>{outpass.studentId[0]}</Avatar>
+                <List>
+                  <Typography variant="h6" sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+                    Recent Scans
+                  </Typography>
+                  {scans.map((scan, index) => (
+                    <ListItem key={index} divider={index !== scans.length - 1}>
+                      <Avatar sx={{ mr: 2, bgcolor: scan.status === 'Active' ? 'success.main' : 'error.main' }}>
+                        {scan.student?.name?.[0]}
+                      </Avatar>
                       <ListItemText
-                        primary={`Student ${outpass.studentId}`}
-                        secondary={
-                          <React.Fragment>
-                            <Typography component="span" variant="body2" color="text.primary">
-                              {outpass.destination}
-                            </Typography>
-                            {` - Left at ${outpass.timeOfLeaving}`}
-                          </React.Fragment>
-                        }
+                        primary={scan.student?.name}
+                        secondary={`${scan.destination} - ${new Date(scan.securityCheckpoints?.exitScan?.timestamp).toLocaleTimeString()}`}
                       />
-                      <Chip label="Outside" color="secondary" size="small" sx={{ fontWeight: 'bold' }} />
+                      <Chip
+                        label={scan.status}
+                        color={scan.status === 'Active' ? 'success' : 'error'}
+                        size="small"
+                      />
                     </ListItem>
                   ))}
                 </List>
@@ -153,15 +152,19 @@ const SecurityScan = () => {
             </Grid>
           </Grid>
         </Container>
-        <Snackbar
-          open={snackbarOpen}
-          autoHideDuration={3000}
-          onClose={() => setSnackbarOpen(false)}
-          message={snackbarMessage}
-        />
+
+        <Snackbar 
+          open={alert.open} 
+          autoHideDuration={4000} 
+          onClose={() => setAlert({ ...alert, open: false })}
+        >
+          <Alert severity={alert.severity} variant="filled">
+            {alert.message}
+          </Alert>
+        </Snackbar>
       </Box>
     </ThemeProvider>
-  );
-};
+  )
+}
 
-export default SecurityScan;
+export default SecurityScan

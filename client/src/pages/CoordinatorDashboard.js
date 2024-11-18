@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ThemeProvider, createTheme, useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import CssBaseline from '@mui/material/CssBaseline';
@@ -27,7 +27,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
@@ -85,6 +84,7 @@ const CoordinatorDashboard = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
   const [currentView, setCurrentView] = useState('dashboard');
+  const [outpassRequests, setOutpassRequests] = useState([]);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -102,6 +102,94 @@ const CoordinatorDashboard = () => {
     setCurrentView(view);
     setMobileOpen(false);
   };
+
+  const fetchOutpassRequests = async () => {
+    try {
+      const userId = localStorage.getItem('userId')
+      const userRole = localStorage.getItem('userRole').toLowerCase()
+      
+      const response = await fetch(`http://localhost:5001/api/outpass/pending/${userRole}/${userId}`, {
+        credentials: 'include',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      })
+      
+      const data = await response.json()
+      
+      if (data.success) {
+        const mappedRequests = data.data.map(request => ({
+          id: request._id,
+          studentName: request.student?.user?.name || 'Unknown Student',
+          destination: request.destination,
+          dateOfGoing: new Date(request.dateOfGoing).toLocaleDateString(),
+          dateOfArrival: new Date(request.dateOfArrival).toLocaleDateString(),
+          status: request.status,
+          reason: request.reason
+        }))
+        
+        setOutpassRequests(mappedRequests)
+      }
+    } catch (error) {
+      console.error('Error fetching outpass requests:', error)
+    }
+  }
+
+  useEffect(() => {
+    fetchOutpassRequests();
+  }, []);
+
+  const handleApprove = async (requestId) => {
+    try {
+      const response = await fetch(`http://localhost:5001/api/outpass/${requestId}/approve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ approverRole: 'coordinator', status: 'Approved', remarks: 'Approved by coordinator' }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        setOutpassRequests(prevRequests => 
+          prevRequests.map(request => 
+            request.id === requestId ? { ...request, status: 'Pending', currentApprover: 'warden' } : request
+          )
+        );
+      }
+    } catch (error) {
+      console.error('Error approving outpass:', error);
+    }
+  };
+
+  const handleReject = async (requestId) => {
+    try {
+      const response = await fetch(`http://localhost:5001/api/outpass/${requestId}/approve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ approverRole: 'coordinator', status: 'Rejected', remarks: 'Rejected by admin' }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        setOutpassRequests(prevRequests => 
+          prevRequests.map(request => 
+            request.id === requestId ? { ...request, status: 'Rejected' } : request
+          )
+        );
+      }
+    } catch (error) {
+      console.error('Error rejecting outpass:', error);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token')
+    localStorage.removeItem('userId')
+    localStorage.removeItem('userRole')
+    localStorage.removeItem('userEmail')
+    window.location.href = '/login'
+  }
 
   const drawer = (
     <Box sx={{ mt: isMobile ? 2 : 8, p: 2 }}>
@@ -134,18 +222,10 @@ const CoordinatorDashboard = () => {
     </Box>
   );
 
-  const outpassRequests = [
-    { id: 1, studentName: 'Ananthu', destination: 'Home', dateOfGoing: '2024-10-15', dateOfArrival: '2024-10-17', status: 'Pending' },
-    { id: 2, studentName: 'Anandhu', destination: 'Library', dateOfGoing: '2024-10-11', dateOfArrival: '2024-10-11', status: 'Pending' },
-    { id: 3, studentName: 'Yadu', destination: 'City XYZ', dateOfGoing: '2024-10-20', dateOfArrival: '2024-10-22', status: 'Pending' },
-    { id: 4, studentName: 'Rahul', destination: 'Sports Event', dateOfGoing: '2024-10-18', dateOfArrival: '2024-10-19', status: 'Pending' },
-    { id: 5, studentName: 'Shiraz', destination: 'Medical Appointment', dateOfGoing: '2024-10-25', dateOfArrival: '2024-10-25', status: 'Pending' },
-  ];
-
   const renderDashboard = () => (
     <>
       <Typography variant="h4" sx={{ mb: 4, fontWeight: 'bold', color: '#1A2027' }}>
-        Welcome, HOD!
+        Welcome, Coordinator!
       </Typography>
       <Grid container spacing={3}>
         <Grid item xs={12} md={4}>
@@ -195,29 +275,48 @@ const CoordinatorDashboard = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {outpassRequests.map((request) => (
-                      <TableRow key={request.id}>
-                        <TableCell>{request.studentName}</TableCell>
-                        <TableCell>{request.destination}</TableCell>
-                        <TableCell>{request.dateOfGoing}</TableCell>
-                        <TableCell>{request.dateOfArrival}</TableCell>
-                        <TableCell>
-                          <Chip
-                            label={request.status}
-                            color={request.status === 'Pending' ? 'warning' : 'success'}
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Button variant="contained" color="primary" size="small" sx={{ mr: 1 }}>
-                            Approve
-                          </Button>
-                          <Button variant="outlined" color="error" size="small">
-                            Reject
-                          </Button>
+                    {outpassRequests.length > 0 ? (
+                      outpassRequests.map((request) => (
+                        <TableRow key={request.id}>
+                          <TableCell>{request.studentName}</TableCell>
+                          <TableCell>{request.destination}</TableCell>
+                          <TableCell>{request.dateOfGoing}</TableCell>
+                          <TableCell>{request.dateOfArrival}</TableCell>
+                          <TableCell>
+                            <Chip
+                              label={request.status}
+                              color={request.status === 'Pending' ? 'warning' : 'success'}
+                              size="small"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Button 
+                              variant="contained" 
+                              color="primary" 
+                              size="small" 
+                              sx={{ mr: 1 }} 
+                              onClick={() => handleApprove(request.id)}
+                            >
+                              Approve
+                            </Button>
+                            <Button 
+                              variant="outlined" 
+                              color="error" 
+                              size="small" 
+                              onClick={() => handleReject(request.id)}
+                            >
+                              Reject
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={6} align="center">
+                          No pending requests found
                         </TableCell>
                       </TableRow>
-                    ))}
+                    )}
                   </TableBody>
                 </Table>
               </TableContainer>
@@ -254,10 +353,10 @@ const CoordinatorDashboard = () => {
                     <TableCell>{request.dateOfGoing}</TableCell>
                     <TableCell>{request.dateOfArrival}</TableCell>
                     <TableCell>
-                      <Button variant="contained" color="primary" size="small" sx={{ mr: 1 }}>
+                      <Button variant="contained" color="primary" size="small" sx={{ mr: 1 }} onClick={() => handleApprove(request.id)}>
                         Approve
                       </Button>
-                      <Button variant="outlined" color="error" size="small">
+                      <Button variant="outlined" color="error" size="small" onClick={() => handleReject(request.id)}>
                         Reject
                       </Button>
                     </TableCell>
@@ -391,8 +490,8 @@ const CoordinatorDashboard = () => {
               open={Boolean(anchorEl)}
               onClose={handleClose}
             >
-              <MenuItem onClick={handleClose}>Profile</MenuItem>
-              <MenuItem onClick={handleClose}>
+              <MenuItem onClick={() => handleViewChange('profile')}>Profile</MenuItem>
+              <MenuItem onClick={handleLogout}>
                 <ExitToAppIcon sx={{ mr: 1 }} />
                 Logout
               </MenuItem>
