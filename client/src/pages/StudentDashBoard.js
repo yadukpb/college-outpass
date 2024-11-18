@@ -134,6 +134,7 @@ const ProfileCard = ({ title, children, action }) => (
 
 const Profile = () => {
   const [loading, setLoading] = useState(true)
+  const [isEditing, setIsEditing] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
     rollNo: '',
@@ -192,16 +193,17 @@ const Profile = () => {
 
   const fetchProfileData = async () => {
     try {
-      const userId = localStorage.getItem('userId');
-      const response = await axios.get(`http://localhost:5001/api/student/profile/${userId}`);
+      const userId = localStorage.getItem('userId')
+      const response = await axios.get(`http://localhost:5001/api/student/profile/${userId}`)
       if (response.data.success) {
-        setFormData(response.data.data);
+        setFormData(response.data.data)
+        setIsEditing(response.data.data._id ? true : false)
       }
     } catch (error) {
-      console.error('Error fetching profile data:', error);
-      setError('Failed to fetch profile data');
+      console.error('Error fetching profile data:', error)
+      setError('Failed to fetch profile data')
     }
-  };
+  }
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
@@ -236,19 +238,24 @@ const Profile = () => {
         parentInfo: formData.parentInfo,
         hodId: formData.hodId,
         wardenId: formData.wardenId,
-        coordinatorId: formData.coordinatorId,
-        
+        coordinatorId: formData.coordinatorId
       }
 
-      const response = await axios.post('http://localhost:5001/api/student/complete-profile', dataToSubmit)
+      let response
+      if (isEditing) {
+        response = await axios.put(`http://localhost:5001/api/student/update-profile/${formData._id}`, dataToSubmit)
+      } else {
+        response = await axios.post('http://localhost:5001/api/student/complete-profile', dataToSubmit)
+      }
 
       if (response.data.success) {
         localStorage.setItem('studentId', response.data.student._id)
+        toast.success(isEditing ? 'Profile updated successfully' : 'Profile completed successfully')
         window.location.reload()
       }
     } catch (error) {
       console.error('Submission error:', error)
-      setError(error.response?.data?.message || 'Failed to complete profile')
+      setError(error.response?.data?.message || `Failed to ${isEditing ? 'update' : 'complete'} profile`)
     } finally {
       setLoading(false)
     }
@@ -264,7 +271,18 @@ const Profile = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Typography variant="h4" sx={{ mb: 4 }}>Complete Your Profile</Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+        <Typography variant="h4">{isEditing ? 'Edit Profile' : 'Complete Your Profile'}</Typography>
+        {isEditing && (
+          <Button
+            variant="outlined"
+            startIcon={<EditIcon />}
+            onClick={() => setIsEditing(true)}
+          >
+            Edit Profile
+          </Button>
+        )}
+      </Box>
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>
       )}
@@ -467,7 +485,7 @@ const Profile = () => {
               size="large"
               disabled={loading}
             >
-              Complete Profile
+              {isEditing ? 'Update Profile' : 'Complete Profile'}
             </Button>
           </Grid>
         </Grid>
