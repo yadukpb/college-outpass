@@ -145,16 +145,13 @@ const CoordinatorDashboard = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         body: JSON.stringify({ approverRole: 'coordinator', status: 'Approved', remarks: 'Approved by coordinator' }),
       });
       const data = await response.json();
       if (data.success) {
-        setOutpassRequests(prevRequests => 
-          prevRequests.map(request => 
-            request.id === requestId ? { ...request, status: 'Pending', currentApprover: 'warden' } : request
-          )
-        );
+        fetchOutpassRequests();
       }
     } catch (error) {
       console.error('Error approving outpass:', error);
@@ -167,16 +164,13 @@ const CoordinatorDashboard = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         body: JSON.stringify({ approverRole: 'coordinator', status: 'Rejected', remarks: 'Rejected by admin' }),
       });
       const data = await response.json();
       if (data.success) {
-        setOutpassRequests(prevRequests => 
-          prevRequests.map(request => 
-            request.id === requestId ? { ...request, status: 'Rejected' } : request
-          )
-        );
+        fetchOutpassRequests();
       }
     } catch (error) {
       console.error('Error rejecting outpass:', error);
@@ -460,7 +454,7 @@ const CoordinatorDashboard = () => {
               <MenuIcon />
             </IconButton>
             <Typography variant="h6" noWrap component="div" sx={{ color: 'primary.main', fontWeight: 'bold', flexGrow: 1, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
-              HOD Dashboard
+              Coordinator Dashboard
             </Typography>
             <IconButton color="primary" sx={{ mr: 2 }}>
               <NotificationsIcon />

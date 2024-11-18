@@ -65,6 +65,14 @@ const NewOutpass = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    
+    if (name === 'dateOfReturn') {
+      if (formData.dateOfLeaving && value < formData.dateOfLeaving) {
+        toast.error('Return date cannot be before leaving date');
+        return;
+      }
+    }
+    
     if (name in formData) {
       setFormData((prev) => ({
         ...prev,
@@ -367,7 +375,9 @@ const NewOutpass = () => {
                             ),
                           }}
                           InputLabelProps={{ shrink: true }}
-                          inputProps={{ min: today }}
+                          inputProps={{ 
+                            min: formData.dateOfLeaving || today 
+                          }}
                         />
                       </Grid>
                       <Grid item xs={12} md={6}>

@@ -104,6 +104,10 @@ const OutpassSystem = () => {
           navigate('/hod-dashboard');
         } else if (user.role === 'warden') {
           navigate('/warden-dashboard');
+        } else if (user.role === 'rootAdmin') {
+          navigate('/admin-dashboard');
+        } else if (user.role === 'security') {
+          navigate('/security');
         }
 
         axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;

@@ -66,63 +66,156 @@ const MessageBubble = styled(Paper)(({ theme, sent }) => ({
   borderBottomLeftRadius: sent ? theme.spacing(2) : 0,
 }));
 
-const contacts = [
-  { 
-    id: 1, 
-    name: 'HOD - Dr. Smitha', 
-    avatar: '/api/placeholder/40/40',
-    lastMessage: 'Please submit the semester report',
-    lastSeen: '2 min ago',
-    online: true
-  },
-  { 
-    id: 2, 
-    name: 'Coordinator - Prof. Ananthu', 
-    avatar: '/api/placeholder/40/40',
-    lastMessage: 'Meeting scheduled for tomorrow',
-    lastSeen: '5 min ago',
-    online: true
-  },
-  { 
-    id: 3, 
-    name: 'Warden - Mr. Anil', 
-    avatar: '/api/placeholder/40/40',
-    lastMessage: 'Hostel inspection at 4 PM',
-    lastSeen: '1 hour ago',
-    online: false
-  },
-];
-
-const sampleChats = {
-  1: [
-    { text: 'Good morning ', sender: 'user', time: '9:30 AM' },
-    { text: 'Hello! How can I help you today?', sender: 'contact', time: '9:31 AM' },
-    { text: 'I wanted to discuss the semester report', sender: 'user', time: '9:32 AM' },
-    { text: 'Sure, please submit it by Friday', sender: 'contact', time: '9:33 AM' },
-    { text: 'Will do, thank you!', sender: 'user', time: '9:34 AM' },
-  ],
-  2: [
-    { text: 'Meeting tomorrow at 10 AM?', sender: 'contact', time: '2:20 PM' },
-    { text: 'Yes, I will be there', sender: 'user', time: '2:21 PM' },
-  ],
-  3: [
-    { text: 'Hostel inspection scheduled', sender: 'contact', time: '1:15 PM' },
-    { text: 'Noted, I will inform the students', sender: 'user', time: '1:16 PM' },
-  ]
-};
-
 const ChatInterface = () => {
   const [selectedContact, setSelectedContact] = useState(null);
   const [message, setMessage] = useState('');
-  const [chatHistory, setChatHistory] = useState(sampleChats);
+  const [chatHistory, setChatHistory] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
+  const [contacts, setContacts] = useState([]);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [showContacts, setShowContacts] = useState(true);
 
   useEffect(() => {
+    fetchStudentProfile();
     setShowContacts(!isMobile || !selectedContact);
   }, [isMobile, selectedContact]);
+
+  const fetchStudentProfile = async () => {
+    try {
+      const userId = localStorage.getItem('userId');
+      const response = await fetch(`/api/student/profile/${userId}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        const staffContacts = [];
+        
+        if (data.data.coordinator) {
+          staffContacts.push({
+            id: data.data.coordinator._id,
+            name: `Coordinator - ${data.data.coordinator.email.split('@')[0]}`,
+            email: data.data.coordinator.email,
+            role: 'coordinator',
+            avatar: '/api/placeholder/40/40',
+            online: true,
+            lastSeen: 'Online'
+          });
+        }
+        
+        if (data.data.hod) {
+          staffContacts.push({
+            id: data.data.hod._id,
+            name: `HOD - ${data.data.hod.email.split('@')[0]}`,
+            email: data.data.hod.email,
+            role: 'hod',
+            avatar: '/api/placeholder/40/40',
+            online: true,
+            lastSeen: 'Online'
+          });
+        }
+        
+        if (data.data.warden) {
+          staffContacts.push({
+            id: data.data.warden._id,
+            name: `Warden - ${data.data.warden.email.split('@')[0]}`,
+            email: data.data.warden.email,
+            role: 'warden',
+            avatar: '/api/placeholder/40/40',
+            online: true,
+            lastSeen: 'Online'
+          });
+        }
+        
+        setContacts(staffContacts);
+        fetchChats(staffContacts);
+      }
+    } catch (error) {
+      console.error('Error fetching student profile:', error);
+    }
+  };
+
+  const fetchChats = async (staffContacts) => {
+    try {
+      const userId = localStorage.getItem('userId');
+      const response = await fetch(`/api/chats/${userId}`);
+      const data = await response.json();
+      
+      const formattedChats = {};
+      staffContacts.forEach(contact => {
+        formattedChats[contact.id] = [];
+        if (data.success) {
+          const contactChats = data.chats.find(chat => 
+            chat.participant._id === contact.id
+          );
+          
+          if (contactChats) {
+            formattedChats[contact.id] = contactChats.messages.map(msg => ({
+              text: msg.content,
+              sender: msg.sender === userId ? 'user' : 'contact',
+              time: new Date(msg.timestamp).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit'
+              })
+            }));
+          }
+        }
+      });
+      setChatHistory(formattedChats);
+    } catch (error) {
+      const formattedChats = {};
+      staffContacts.forEach(contact => {
+        formattedChats[contact.id] = [];
+      });
+      setChatHistory(formattedChats);
+      console.error('Error fetching chats:', error);
+    }
+  };
+
+  const handleMessageSend = async () => {
+    if (message.trim() && selectedContact) {
+      try {
+        const userId = localStorage.getItem('userId');
+        const response = await fetch('/api/messages/send', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            senderId: userId,
+            receiverId: selectedContact.id,
+            content: message
+          }),
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          const newMessage = {
+            text: message,
+            sender: 'user',
+            time: new Date().toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit'
+            })
+          };
+          
+          setChatHistory(prev => ({
+            ...prev,
+            [selectedContact.id]: [
+              ...(prev[selectedContact.id] || []),
+              newMessage
+            ],
+          }));
+          setMessage('');
+        }
+      } catch (error) {
+        console.error('Error sending message:', error);
+      }
+    }
+  };
+
+  const filteredContacts = contacts.filter(contact =>
+    contact.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const handleContactSelect = (contact) => {
     setSelectedContact(contact);
@@ -130,29 +223,6 @@ const ChatInterface = () => {
       setShowContacts(false);
     }
   };
-
-  const handleMessageSend = () => {
-    if (message.trim() && selectedContact) {
-      const newMessage = {
-        text: message,
-        sender: 'user',
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
-      
-      setChatHistory({
-        ...chatHistory,
-        [selectedContact.id]: [
-          ...(chatHistory[selectedContact.id] || []),
-          newMessage
-        ],
-      });
-      setMessage('');
-    }
-  };
-
-  const filteredContacts = contacts.filter(contact =>
-    contact.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   const ContactsList = () => (
     <Paper sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>

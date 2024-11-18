@@ -107,18 +107,25 @@ const WardenDashboard = () => {
   const fetchOutpassRequests = async () => {
     try {
       const wardenId = localStorage.getItem('userId');
+      console.log('Warden ID:', wardenId);
+      
       const response = await fetch(`http://localhost:5001/api/outpass/pending/warden/${wardenId}`);
       const data = await response.json();
+      console.log('Fetched Data:', data);
+      
       if (data.success) {
-        setOutpassRequests(data.data.map(request => ({
+        const mappedRequests = data.data.map(request => ({
           id: request._id,
-          studentName: request.student.name,
-          destination: request.destination,
+          studentName: request.student?.name || 'Unknown Student',
+          destination: request.destination || 'Not specified',
           dateOfGoing: new Date(request.dateOfGoing).toLocaleString(),
           dateOfArrival: new Date(request.dateOfArrival).toLocaleString(),
-          status: request.wardenApproval.status,
-          reason: request.reason
-        })));
+          status: request.status || 'Pending',
+          reason: request.reason || 'No reason provided'
+        }));
+        
+        console.log('Mapped Requests:', mappedRequests);
+        setOutpassRequests(mappedRequests);
       }
     } catch (error) {
       console.error('Error fetching outpass requests:', error);

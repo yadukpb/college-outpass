@@ -37,6 +37,7 @@ import {
   Paper,
   Chip,
   InputAdornment,
+  CircularProgress,
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
@@ -60,6 +61,7 @@ import {
   Remove as RemoveIcon,
 } from '@mui/icons-material';
 import { PieChart, Pie, Cell, RadialBarChart, RadialBar, AreaChart, Area, XAxis, YAxis, Tooltip } from 'recharts';
+import axios from 'axios';
 
 const drawerWidth = 240;
 
@@ -89,16 +91,32 @@ const theme = createTheme({
 const StudentManagement = () => {
   const [view, setView] = useState('list');
   const [emails, setEmails] = useState(['']);
-  const [students, setStudents] = useState([
-    { id: 1, name: 'Rahul Kumar', email: 'rahul@example.com', department: 'Computer Science', year: '3rd', hostel: 'A Block', rollNo: 'CS2021001', signedUp: true, verified: true },
-    { id: 2, name: 'Priya Sharma', email: 'priya@example.com', department: 'Electronics', year: '2nd', hostel: 'B Block', rollNo: 'EC2022015', signedUp: true, verified: false },
-    { id: 3, name: 'Amit Patel', email: 'amit@example.com', department: 'Mechanical', year: '4th', hostel: 'C Block', rollNo: 'ME2020032', signedUp: false, verified: false },
-  ]);
+  const [students, setStudents] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [studentFilters, setStudentFilters] = useState({
     year: 'all',
     department: 'all',
-    hostel: 'all',
+    search: ''
   });
+
+  useEffect(() => {
+    fetchStudents();
+  }, []);
+
+  const fetchStudents = async () => {
+    try {
+      const response = await fetch('http://localhost:5001/api/students');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      setStudents(data.data);
+    } catch (error) {
+      console.error('Error fetching students:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAddEmailField = () => {
     setEmails([...emails, '']);
@@ -119,7 +137,6 @@ const StudentManagement = () => {
     const validEmails = emails.filter(email => email.trim() !== '');
     
     if (validEmails.length === 0) {
-      // Add error handling here if needed
       console.error('No valid emails provided');
       return;
     }
@@ -130,34 +147,31 @@ const StudentManagement = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ emails: validEmails }), // Send as an object with emails array
+        body: JSON.stringify({ emails: validEmails })
       });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data = await response.json();
-      
-      const newStudents = validEmails.map(email => ({
-        email: email.trim(),
-        name: '',
-        department: '',
-        year: '',
-        hostel: '',
-        rollNo: '',
-        signedUp: false,
-        verified: false,
-      }));
-
-      setStudents([...students, ...newStudents]);
+      await fetchStudents();
       setEmails(['']);
       setView('list');
     } catch (error) {
       console.error('Error adding students:', error);
-      // Add error handling UI feedback here if needed
     }
   };
+
+  const filteredStudents = students.filter(student => {
+    const matchesYear = studentFilters.year === 'all' || student.year === studentFilters.year;
+    const matchesDepartment = studentFilters.department === 'all' || student.department === studentFilters.department;
+    const matchesSearch = !studentFilters.search || 
+      student.name.toLowerCase().includes(studentFilters.search.toLowerCase()) ||
+      student.email.toLowerCase().includes(studentFilters.search.toLowerCase()) ||
+      student.rollNo.toLowerCase().includes(studentFilters.search.toLowerCase());
+
+    return matchesYear && matchesDepartment && matchesSearch;
+  });
 
   return (
     <>
@@ -249,47 +263,48 @@ const StudentManagement = () => {
                     <TableCell>Email</TableCell>
                     <TableCell>Department</TableCell>
                     <TableCell>Year</TableCell>
-                    <TableCell>Hostel</TableCell>
+                    <TableCell>Coordinator</TableCell>
                     <TableCell>Status</TableCell>
                     <TableCell>Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {students.map((student) => (
-                    <TableRow key={student.id}>
-                      <TableCell>{student.rollNo}</TableCell>
-                      <TableCell>{student.name}</TableCell>
-                      <TableCell>{student.email}</TableCell>
-                      <TableCell>{student.department}</TableCell>
-                      <TableCell>{student.year}</TableCell>
-                      <TableCell>{student.hostel}</TableCell>
-                      <TableCell>
-                        <Chip
-                          icon={student.signedUp ? <CheckCircleIcon /> : <CancelIcon />}
-                          label={student.signedUp ? 'Signed Up' : 'Not Signed Up'}
-                          color={student.signedUp ? 'success' : 'error'}
-                          size="small"
-                        />
-                        {student.signedUp && (
-                          <Chip
-                            icon={student.verified ? <VerifiedIcon /> : <ErrorIcon />}
-                            label={student.verified ? 'Verified' : 'Not Verified'}
-                            color={student.verified ? 'primary' : 'warning'}
-                            size="small"
-                            sx={{ ml: 1 }}
-                          />
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Button variant="outlined" size="small" sx={{ mr: 1, mb: { xs: 1, sm: 0 } }}>
-                          Edit
-                        </Button>
-                        <Button variant="outlined" color="error" size="small">
-                          Remove
-                        </Button>
-                      </TableCell>
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={8} align="center">Loading...</TableCell>
                     </TableRow>
-                  ))}
+                  ) : filteredStudents.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} align="center">No students found</TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredStudents.map((student) => (
+                      <TableRow key={student.id}>
+                        <TableCell>{student.rollNo}</TableCell>
+                        <TableCell>{student.name}</TableCell>
+                        <TableCell>{student.email}</TableCell>
+                        <TableCell>{student.department}</TableCell>
+                        <TableCell>{student.year}</TableCell>
+                        <TableCell>{student.coordinator}</TableCell>
+                        <TableCell>
+                          <Chip
+                            icon={student.signedUp ? <CheckCircleIcon /> : <CancelIcon />}
+                            label={student.signedUp ? 'Signed Up' : 'Not Signed Up'}
+                            color={student.signedUp ? 'success' : 'error'}
+                            size="small"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Button variant="outlined" size="small" sx={{ mr: 1 }}>
+                            Edit
+                          </Button>
+                          <Button variant="outlined" color="error" size="small">
+                            Remove
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </TableContainer>
@@ -347,13 +362,14 @@ const RootAdminDashboard = () => {
   });
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [dashboardStats, setDashboardStats] = useState({
-    hod: { pending: 0, approved: 0, rejected: 0 },
-    coordinator: { pending: 0, approved: 0, rejected: 0 },
-    warden: { pending: 0, approved: 0, rejected: 0 },
-    totalRequests: 0,
+  const [outpassData, setOutpassData] = useState([]);
+  const [outpassStats, setOutpassStats] = useState({
+    pending: 0,
+    approved: 0,
+    rejected: 0,
     studentsOutOfCampus: 0,
-    totalApproved: 0,
+    totalRequests: 0,
+    weeklyData: {}
   });
   const [staffMembers, setStaffMembers] = useState({
     hod: [],
@@ -380,20 +396,58 @@ const RootAdminDashboard = () => {
     department: '',
     branch: ''
   });
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const fetchDashboardStats = async () => {
-      try {
-        const response = await fetch('/api/dashboard-stats');
-        const data = await response.json();
-        setDashboardStats(data);
-      } catch (error) {
-        console.error('Error fetching dashboard stats:', error);
+    fetchOutpassData();
+  }, []);
+
+  const fetchOutpassData = async () => {
+    try {
+      const response = await fetch('http://localhost:5001/api/outpass/all');
+      const data = await response.json();
+      
+      if (data.success) {
+        setOutpassData(data.data);
+        calculateOutpassStats(data.data);
       }
+    } catch (error) {
+      console.error('Error fetching outpass data:', error);
+    }
+  };
+
+  const calculateOutpassStats = (outpasses) => {
+    const stats = {
+      pending: 0,
+      approved: 0,
+      rejected: 0,
+      studentsOutOfCampus: 0,
+      totalRequests: outpasses.length,
+      weeklyData: {}
     };
 
-    fetchDashboardStats();
-  }, []);
+    const now = new Date();
+    const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    
+    outpasses.forEach(outpass => {
+      // Status counts
+      if (outpass.status === 'Pending') stats.pending++;
+      else if (outpass.status === 'Approved') stats.approved++;
+      else if (outpass.status === 'Rejected') stats.rejected++;
+
+      // Count active outpasses (students currently out)
+      if (outpass.status === 'Active') stats.studentsOutOfCampus++;
+
+      // Weekly data
+      const createdDate = new Date(outpass.createdAt);
+      if (now - createdDate <= 7 * 24 * 60 * 60 * 1000) {
+        const dayName = weekDays[createdDate.getDay()];
+        stats.weeklyData[dayName] = (stats.weeklyData[dayName] || 0) + 1;
+      }
+    });
+
+    setOutpassStats(stats);
+  };
 
   useEffect(() => {
     const fetchStaffMembers = async () => {
@@ -420,6 +474,54 @@ const RootAdminDashboard = () => {
 
     fetchStaffMembers();
   }, []);
+
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
+
+  const fetchNotifications = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get('http://localhost:5001/api/notifications');
+      if (response.data.success) {
+        setNotifications(response.data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddNotification = async () => {
+    try {
+      if (!newNotification.title || !newNotification.content) return;
+      
+      const userId = localStorage.getItem('userId');
+      const response = await axios.post('http://localhost:5001/api/notifications', {
+        ...newNotification,
+        createdBy: userId
+      });
+      
+      if (response.data.success) {
+        await fetchNotifications();
+        setNewNotification({ title: '', content: '', priority: 'low' });
+      }
+    } catch (error) {
+      console.error('Error adding notification:', error);
+    }
+  };
+
+  const handleDeleteNotification = async (id) => {
+    try {
+      const response = await axios.delete(`http://localhost:5001/api/notifications/${id}`);
+      if (response.data.success) {
+        await fetchNotifications();
+      }
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+    }
+  };
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -458,20 +560,6 @@ const RootAdminDashboard = () => {
     } else {
       alert("Passwords don't match!");
     }
-  };
-
-  const handleAddNotification = () => {
-    if (newNotification.title && newNotification.content) {
-      setNotifications([
-        ...notifications,
-        { ...newNotification, id: Date.now(), date: new Date().toISOString() },
-      ]);
-      setNewNotification({ title: '', content: '', priority: 'low' });
-    }
-  };
-
-  const handleDeleteNotification = (id) => {
-    setNotifications(notifications.filter((notification) => notification.id !== id));
   };
 
   const handleAddDepartment = () => {
@@ -546,42 +634,16 @@ const RootAdminDashboard = () => {
   );
 
   const renderDashboard = () => {
-    const mockDashboardStats = {
-      hod: { pending: 15, approved: 42, rejected: 8 },
-      coordinator: { pending: 23, approved: 37, rejected: 5 },
-      warden: { pending: 18, approved: 50, rejected: 3 },
-      totalRequests: 201,
-      studentsOutOfCampus: 87,
-      totalApproved: 129,
-    };
-
-    const mockRecentRequests = [
-      { id: 1, name: 'Arjun Singh', rollNo: 'CS2021001', departureDate: '2023-05-15', returnDate: '2023-05-18', status: 'Pending', pendingWith: 'HOD' },
-      { id: 2, name: 'Neha Reddy', rollNo: 'EC2022015', departureDate: '2023-05-16', returnDate: '2023-05-17', status: 'Approved', pendingWith: '-' },
-      { id: 3, name: 'Karthik Iyer', rollNo: 'ME2020032', departureDate: '2023-05-18', returnDate: '2023-05-20', status: 'Rejected', pendingWith: '-' },
-      { id: 4, name: 'Meera Desai', rollNo: 'CS2021045', departureDate: '2023-05-19', returnDate: '2023-05-21', status: 'Pending', pendingWith: 'Warden' },
-    ];
-
     const pieChartData = [
-      { name: 'Pending', value: mockDashboardStats.hod.pending + mockDashboardStats.coordinator.pending + mockDashboardStats.warden.pending },
-      { name: 'Approved', value: mockDashboardStats.hod.approved + mockDashboardStats.coordinator.approved + mockDashboardStats.warden.approved },
-      { name: 'Rejected', value: mockDashboardStats.hod.rejected + mockDashboardStats.coordinator.rejected + mockDashboardStats.warden.rejected },
+      { name: 'Pending', value: outpassStats.pending },
+      { name: 'Approved', value: outpassStats.approved },
+      { name: 'Rejected', value: outpassStats.rejected },
     ];
 
     const COLORS = ['#FFA500', '#4CAF50', '#F44336'];
 
     const radialBarData = [
-      { name: 'Students Out', value: mockDashboardStats.studentsOutOfCampus, fill: '#2196F3' },
-    ];
-
-    const lineChartData = [
-      { name: 'Mon', requests: 30 },
-      { name: 'Tue', requests: 45 },
-      { name: 'Wed', requests: 38 },
-      { name: 'Thu', requests: 50 },
-      { name: 'Fri', requests: 65 },
-      { name: 'Sat', requests: 40 },
-      { name: 'Sun', requests: 25 },
+      { name: 'Students Out', value: outpassStats.studentsOutOfCampus, fill: '#2196F3' },
     ];
 
     return (
@@ -590,7 +652,7 @@ const RootAdminDashboard = () => {
           Root Admin Dashboard
         </Typography>
         <Grid container spacing={3}>
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} md={6}>
             <Card sx={{ height: '100%' }}>
               <CardContent>
                 <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>Outpass Request Status</Typography>
@@ -621,7 +683,7 @@ const RootAdminDashboard = () => {
               </CardContent>
             </Card>
           </Grid>
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} md={6}>
             <Card sx={{ height: '100%' }}>
               <CardContent>
                 <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>Students Out of Campus</Typography>
@@ -644,32 +706,8 @@ const RootAdminDashboard = () => {
                   />
                 </RadialBarChart>
                 <Typography variant="h4" align="center" sx={{ mt: 2 }}>
-                  {mockDashboardStats.studentsOutOfCampus} / {mockDashboardStats.totalRequests}
+                  {outpassStats.studentsOutOfCampus} / {outpassStats.totalRequests}
                 </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <Card sx={{ height: '100%' }}>
-              <CardContent>
-                <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>Weekly Outpass Requests</Typography>
-                <AreaChart
-                  width={300}
-                  height={200}
-                  data={lineChartData}
-                  margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-                >
-                  <defs>
-                    <linearGradient id="colorRequests" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8}/>
-                      <stop offset="95%" stopColor="#8884d8" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Area type="monotone" dataKey="requests" stroke="#8884d8" fillOpacity={1} fill="url(#colorRequests)" />
-                </AreaChart>
               </CardContent>
             </Card>
           </Grid>
@@ -688,37 +726,32 @@ const RootAdminDashboard = () => {
                   <TableCell>Departure Date</TableCell>
                   <TableCell>Return Date</TableCell>
                   <TableCell>Status</TableCell>
-                  <TableCell>Pending With</TableCell>
+                  <TableCell>Current Approver</TableCell>
                   <TableCell>Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {mockRecentRequests.map((request) => (
-                  <TableRow key={request.id}>
-                    <TableCell>{request.name}</TableCell>
-                    <TableCell>{request.rollNo}</TableCell>
-                    <TableCell>{request.departureDate}</TableCell>
-                    <TableCell>{request.returnDate}</TableCell>
+                {outpassData.map((outpass) => (
+                  <TableRow key={outpass._id}>
+                    <TableCell>{outpass.student?.name}</TableCell>
+                    <TableCell>{outpass.student?.rollNo}</TableCell>
+                    <TableCell>{new Date(outpass.dateOfGoing).toLocaleDateString()}</TableCell>
+                    <TableCell>{new Date(outpass.dateOfArrival).toLocaleDateString()}</TableCell>
                     <TableCell>
                       <Chip 
-                        label={request.status} 
+                        label={outpass.status} 
                         color={
-                          request.status === 'Pending' ? 'warning' :
-                          request.status === 'Approved' ? 'success' : 'error'
+                          outpass.status === 'Pending' ? 'warning' :
+                          outpass.status === 'Approved' ? 'success' : 'error'
                         } 
                         size="small" 
                       />
                     </TableCell>
-                    <TableCell>{request.pendingWith}</TableCell>
+                    <TableCell>{outpass.currentApprover}</TableCell>
                     <TableCell>
                       <Button variant="outlined" size="small" sx={{ mr: 1, mb: { xs: 1, sm: 0 } }}>
                         View
                       </Button>
-                      {request.status === 'Pending' && (
-                        <Button variant="contained" size="small" color="primary">
-                          Approve
-                        </Button>
-                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -971,80 +1004,86 @@ const RootAdminDashboard = () => {
     </Box>
   );
 
-  const renderNoticeBoard = () => (
-    <>
-      <Typography variant="h4" sx={{ mb: 4, fontWeight: 'bold', color: '#1A2027' }}>
-        Notice Board
-      </Typography>
-      <Card sx={{ mb: 4 }}>
-        <CardContent>
-          <Typography variant="h6" sx={{ mb: 2 }}>Add New Notification</Typography>
-          <TextField
-            fullWidth
-            label="Title"
-            value={newNotification.title}
-            onChange={(e) => setNewNotification({ ...newNotification, title: e.target.value })}
-            sx={{ mb: 2 }}
-          />
-          <TextField
-            fullWidth
-            label="Content"
-            multiline
-            rows={4}
-            value={newNotification.content}
-            onChange={(e) => setNewNotification({ ...newNotification, content: e.target.value })}
-            sx={{ mb: 2 }}
-          />
-          <FormControl fullWidth sx={{ mb: 2 }}>
-            <InputLabel>Priority</InputLabel>
-            <Select
-              value={newNotification.priority}
-              onChange={(e) => setNewNotification({ ...newNotification, priority: e.target.value })}
-            >
-              <MenuItem value="low">Low</MenuItem>
-              <MenuItem value="medium">Medium</MenuItem>
-              <MenuItem value="high">High</MenuItem>
-            </Select>
-          </FormControl>
-          <Button variant="contained" onClick={handleAddNotification}>
-            Add Notification
-          </Button>
-        </CardContent>
-      </Card>
-      <Typography variant="h6" sx={{ mb: 2 }}>Posted Notifications</Typography>
-      {notifications.map((notification) => (
-        <Card key={notification.id} sx={{ mb: 2 }}>
+  const renderNoticeBoard = () => {
+    return (
+      <>
+        <Typography variant="h4" sx={{ mb: 4, fontWeight: 'bold', color: '#1A2027' }}>
+          Notice Board
+        </Typography>
+        <Card sx={{ mb: 4 }}>
           <CardContent>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-              <Typography variant="h6">{notification.title}</Typography>
-              <Chip
-                label={notification.priority.toUpperCase()}
-                color={
-                  notification.priority === 'high' ? 'error' :
-                  notification.priority === 'medium' ? 'warning' : 'success'
-                }
-                size="small"
-              />
-            </Box>
-            <Typography variant="body2" sx={{ mb: 1 }}>{notification.content}</Typography>
-            <Typography variant="caption" color="text.secondary">
-              Posted on: {new Date(notification.date).toLocaleString()}
-            </Typography>
-            <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
-              <Button
-                variant="outlined"
-                color="error"
-                size="small"
-                onClick={() => handleDeleteNotification(notification.id)}
+            <Typography variant="h6" sx={{ mb: 2 }}>Add New Notification</Typography>
+            <TextField
+              fullWidth
+              label="Title"
+              value={newNotification.title}
+              onChange={(e) => setNewNotification({ ...newNotification, title: e.target.value })}
+              sx={{ mb: 2 }}
+            />
+            <TextField
+              fullWidth
+              label="Content"
+              multiline
+              rows={4}
+              value={newNotification.content}
+              onChange={(e) => setNewNotification({ ...newNotification, content: e.target.value })}
+              sx={{ mb: 2 }}
+            />
+            <FormControl fullWidth sx={{ mb: 2 }}>
+              <InputLabel>Priority</InputLabel>
+              <Select
+                value={newNotification.priority}
+                onChange={(e) => setNewNotification({ ...newNotification, priority: e.target.value })}
               >
-                Delete
-              </Button>
-            </Box>
+                <MenuItem value="low">Low</MenuItem>
+                <MenuItem value="medium">Medium</MenuItem>
+                <MenuItem value="high">High</MenuItem>
+              </Select>
+            </FormControl>
+            <Button variant="contained" onClick={handleAddNotification}>
+              Add Notification
+            </Button>
           </CardContent>
         </Card>
-      ))}
-    </>
-  );
+        <Typography variant="h6" sx={{ mb: 2 }}>Posted Notifications</Typography>
+        {loading ? (
+          <CircularProgress />
+        ) : (
+          notifications.map((notification) => (
+            <Card key={notification._id} sx={{ mb: 2 }}>
+              <CardContent>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                  <Typography variant="h6">{notification.title}</Typography>
+                  <Chip
+                    label={notification.priority.toUpperCase()}
+                    color={
+                      notification.priority === 'high' ? 'error' :
+                      notification.priority === 'medium' ? 'warning' : 'success'
+                    }
+                    size="small"
+                  />
+                </Box>
+                <Typography variant="body2" sx={{ mb: 1 }}>{notification.content}</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Posted on: {new Date(notification.createdAt).toLocaleString()}
+                </Typography>
+                <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    size="small"
+                    onClick={() => handleDeleteNotification(notification._id)}
+                  >
+                    Delete
+                  </Button>
+                </Box>
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </>
+    );
+  };
 
   const renderContent = () => {
     switch (currentView) {

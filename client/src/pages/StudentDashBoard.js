@@ -553,59 +553,342 @@ const RippleChip = ({ label, color }) => {
 };
 
 const RecentOutpassStatus = ({ outpass }) => {
+  const [pdfDocument, setPdfDocument] = useState(null)
+
+  useEffect(() => {
+    const generatePDF = async () => {
+      if (!outpass?.qrCode) return
+      const QRCode = require('qrcode')
+      try {
+        const exitQRDataUrl = await QRCode.toDataURL(outpass.qrCode.exit)
+        const entryQRDataUrl = await QRCode.toDataURL(outpass.qrCode.entry)
+        
+        const doc = (
+          <Document>
+            <Page size="A4" style={styles.page}>
+              <View style={styles.header}>
+                <View style={styles.institutionInfo}>
+                  <Text style={styles.title}>Amrita Vishwa Vidyapeetham</Text>
+                  <Text style={styles.subtitle}>Student Outpass</Text>
+                </View>
+              </View>
+
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Outpass Details</Text>
+                <View style={styles.row}>
+                  <Text style={styles.label}>Destination</Text>
+                  <Text style={styles.value}>{outpass.destination}</Text>
+                </View>
+                <View style={styles.row}>
+                  <Text style={styles.label}>Going Out</Text>
+                  <Text style={styles.value}>
+                    {new Date(outpass.dateOfGoing).toLocaleDateString()} {outpass.timeOfGoing}
+                  </Text>
+                </View>
+                <View style={styles.row}>
+                  <Text style={styles.label}>Coming Back</Text>
+                  <Text style={styles.value}>
+                    {new Date(outpass.dateOfArrival).toLocaleDateString()} {outpass.timeOfArrival}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.qrContainer}>
+                <View style={styles.qrSection}>
+                  <Text style={styles.qrLabel}>Exit QR Code</Text>
+                  <Image src={exitQRDataUrl} style={styles.qrImage} />
+                </View>
+                <View style={styles.qrSection}>
+                  <Text style={styles.qrLabel}>Entry QR Code</Text>
+                  <Image src={entryQRDataUrl} style={styles.qrImage} />
+                </View>
+              </View>
+            </Page>
+          </Document>
+        )
+        setPdfDocument(doc)
+      } catch (error) {
+        console.error('Error generating QR codes:', error)
+      }
+    }
+
+    generatePDF()
+  }, [outpass])
+
   return (
     <Card sx={{ mt: 3 }}>
       <CardContent>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Latest Approved Outpass</Typography>
-          <Chip
-            label={outpass.status}
-            color="success"
-            sx={{ fontWeight: 'bold' }}
-          />
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Approved Outpass</Typography>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+            <Chip label="Approved" color="success" sx={{ fontWeight: 'bold' }} />
+            {pdfDocument && (
+              <PDFDownloadLink document={pdfDocument} fileName={`outpass_${outpass._id}.pdf`}>
+                {({ loading }) => (
+                  <Button variant="contained" startIcon={<DownloadIcon />} disabled={loading}>
+                    Download PDF
+                  </Button>
+                )}
+              </PDFDownloadLink>
+            )}
+          </Box>
         </Box>
 
-        <Grid container spacing={2}>
-          <Grid item xs={12} sm={6}>
-            <Typography variant="body2" color="text.secondary">Destination</Typography>
-            <Typography variant="body1" fontWeight="bold">{outpass.destination}</Typography>
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={6}>
+            <Card sx={{ height: '100%', boxShadow: 'none', border: '1px solid', borderColor: 'divider' }}>
+              <CardContent>
+                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2 }}>Outpass Details</Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <Typography variant="body2" color="text.secondary">Destination</Typography>
+                    <Typography variant="body1" fontWeight="bold">{outpass.destination}</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="body2" color="text.secondary">Reason</Typography>
+                    <Typography variant="body1" fontWeight="bold">{outpass.reason}</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="body2" color="text.secondary">Going Out</Typography>
+                    <Typography variant="body1" fontWeight="bold">
+                      {new Date(outpass.dateOfGoing).toLocaleDateString()} {outpass.timeOfGoing}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="body2" color="text.secondary">Coming Back</Typography>
+                    <Typography variant="body1" fontWeight="bold">
+                      {new Date(outpass.dateOfArrival).toLocaleDateString()} {outpass.timeOfArrival}
+                    </Typography>
+                  </Grid>
+                </Grid>
+              </CardContent>
+            </Card>
           </Grid>
 
-          <Grid item xs={12} sm={6}>
-            <Typography variant="body2" color="text.secondary">Going Out</Typography>
-            <Typography variant="body1" fontWeight="bold">
-              {new Date(outpass.dateOfGoing).toLocaleDateString()} {outpass.timeOfGoing}
-            </Typography>
-          </Grid>
-
-          <Grid item xs={12} sm={6}>
-            <Typography variant="body2" color="text.secondary">Coming Back</Typography>
-            <Typography variant="body1" fontWeight="bold">
-              {new Date(outpass.dateOfArrival).toLocaleDateString()} {outpass.timeOfArrival}
-            </Typography>
-          </Grid>
+          {outpass.qrCode && (
+            <Grid item xs={12} md={6}>
+              <Card sx={{ height: '100%', boxShadow: 'none', border: '1px solid', borderColor: 'divider' }}>
+                <CardContent>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2 }}>QR Codes</Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', height: '100%' }}>
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>Exit QR</Typography>
+                      <Box sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1, bgcolor: 'background.paper' }}>
+                        <QRCodeSVG value={outpass.qrCode.exit} size={120} level="H" includeMargin={true} />
+                      </Box>
+                    </Box>
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>Entry QR</Typography>
+                      <Box sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1, bgcolor: 'background.paper' }}>
+                        <QRCodeSVG value={outpass.qrCode.entry} size={120} level="H" includeMargin={true} />
+                      </Box>
+                    </Box>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+          )}
         </Grid>
-
-        {outpass.qrCode && (
-          <Box sx={{ mt: 3 }}>
-            <Divider sx={{ my: 2 }} />
-            <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>QR Codes</Typography>
-            <Box sx={{ display: 'flex', justifyContent: 'space-around' }}>
-              <Box>
-                <Typography variant="body2" color="text.secondary" align="center">Exit QR</Typography>
-                <QRCodeSVG value={outpass.qrCode.exit} size={128} />
-              </Box>
-              <Box>
-                <Typography variant="body2" color="text.secondary" align="center">Entry QR</Typography>
-                <QRCodeSVG value={outpass.qrCode.entry} size={128} />
-              </Box>
-            </Box>
-          </Box>
-        )}
       </CardContent>
     </Card>
   )
 }
+
+const OutpassTracker = ({ outpass }) => {
+  const getStepColor = (status) => {
+    switch (status) {
+      case 'Approved': return 'success'
+      case 'Rejected': return 'error'
+      case 'Pending': return 'warning'
+      default: return 'default'
+    }
+  }
+
+  const getSecurityStatus = () => {
+    if (outpass.securityCheckpoints.exitScan.status === 'Completed' && 
+        outpass.securityCheckpoints.entryScan.status === 'Completed') {
+      return 'Completed'
+    } else if (outpass.securityCheckpoints.exitScan.status === 'Completed') {
+      return 'Exit Completed'
+    }
+    return 'Pending'
+  }
+
+  const approvalFlow = [
+    {
+      label: 'Coordinator',
+      status: outpass.coordinatorApproval.status,
+      timestamp: outpass.coordinatorApproval.timestamp,
+      remarks: outpass.coordinatorApproval.remarks,
+      isCurrentApprover: outpass.currentApprover === 'coordinator'
+    },
+    {
+      label: 'Warden',
+      status: outpass.wardenApproval.status,
+      timestamp: outpass.wardenApproval.timestamp,
+      remarks: outpass.wardenApproval.remarks,
+      isCurrentApprover: outpass.currentApprover === 'warden'
+    },
+    {
+      label: 'HOD',
+      status: outpass.hodApproval.status,
+      timestamp: outpass.hodApproval.timestamp,
+      remarks: outpass.hodApproval.remarks,
+      isCurrentApprover: outpass.currentApprover === 'hod'
+    },
+    {
+      label: 'Security',
+      status: getSecurityStatus(),
+      isCurrentApprover: outpass.currentApprover === 'security'
+    }
+  ]
+
+  return (
+    <Card sx={{ mt: 3, p: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+          Current Outpass Status
+        </Typography>
+        <Chip
+          label={outpass.status}
+          color={getStepColor(outpass.status)}
+          sx={{ fontWeight: 'bold' }}
+        />
+      </Box>
+
+      <Box sx={{ width: '100%', mb: 4 }}>
+        <Stepper activeStep={approvalFlow.findIndex(step => step.isCurrentApprover)} alternativeLabel>
+          {approvalFlow.map((step, index) => (
+            <Step key={step.label} completed={step.status === 'Approved' || step.status === 'Completed'}>
+              <StepLabel error={step.status === 'Rejected'}>
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                    {step.label}
+                  </Typography>
+                  <Chip
+                    label={step.status}
+                    size="small"
+                    color={getStepColor(step.status)}
+                    sx={{ mt: 1, mb: 1 }}
+                  />
+                  {step.isCurrentApprover && (
+                    <Box sx={{ 
+                      bgcolor: 'primary.light', 
+                      color: 'primary.main',
+                      p: 0.5,
+                      borderRadius: 1,
+                      mt: 1
+                    }}>
+                      <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
+                        Current Approver
+                      </Typography>
+                    </Box>
+                  )}
+                  {step.timestamp && (
+                    <Typography variant="caption" display="block" color="text.secondary">
+                      {new Date(step.timestamp).toLocaleString()}
+                    </Typography>
+                  )}
+                  {step.remarks && (
+                    <Typography variant="caption" display="block" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                      "{step.remarks}"
+                    </Typography>
+                  )}
+                </Box>
+              </StepLabel>
+            </Step>
+          ))}
+        </Stepper>
+      </Box>
+
+      <Grid container spacing={2} sx={{ bgcolor: 'background.default', p: 2, borderRadius: 1 }}>
+        <Grid item xs={12} sm={6} md={3}>
+          <Typography variant="body2" color="text.secondary">Destination</Typography>
+          <Typography variant="body1" fontWeight="bold">{outpass.destination}</Typography>
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <Typography variant="body2" color="text.secondary">Reason</Typography>
+          <Typography variant="body1" fontWeight="bold">{outpass.reason}</Typography>
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <Typography variant="body2" color="text.secondary">Going Out</Typography>
+          <Typography variant="body1" fontWeight="bold">
+            {new Date(outpass.dateOfGoing).toLocaleDateString()} {outpass.timeOfGoing}
+          </Typography>
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <Typography variant="body2" color="text.secondary">Coming Back</Typography>
+          <Typography variant="body1" fontWeight="bold">
+            {new Date(outpass.dateOfArrival).toLocaleDateString()} {outpass.timeOfArrival}
+          </Typography>
+        </Grid>
+      </Grid>
+    </Card>
+  )
+}
+
+const styles = StyleSheet.create({
+  page: {
+    padding: 30,
+    backgroundColor: '#ffffff'
+  },
+  header: {
+    marginBottom: 20,
+    borderBottom: '1pt solid #999',
+    paddingBottom: 10
+  },
+  institutionInfo: {
+    textAlign: 'center'
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 5
+  },
+  subtitle: {
+    fontSize: 18,
+    color: '#666'
+  },
+  section: {
+    marginBottom: 20
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    borderBottom: '1pt solid #999',
+    paddingBottom: 5
+  },
+  row: {
+    flexDirection: 'row',
+    marginBottom: 8
+  },
+  label: {
+    width: '30%',
+    fontSize: 12,
+    color: '#666'
+  },
+  value: {
+    width: '70%',
+    fontSize: 12
+  },
+  qrContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 20
+  },
+  qrSection: {
+    alignItems: 'center'
+  },
+  qrLabel: {
+    fontSize: 12,
+    marginBottom: 5
+  },
+  qrImage: {
+    width: 150,
+    height: 150
+  }
+})
 
 const StudentDashboard = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -615,6 +898,8 @@ const StudentDashboard = () => {
   const [approvedOutpass, setApprovedOutpass] = useState(null);
   const [latestOutpass, setLatestOutpass] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [notifications, setNotifications] = useState([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(true);
 
   const outpassData = {
     id: '12345',
@@ -650,6 +935,23 @@ const StudentDashboard = () => {
     }
 
     fetchLatestOutpass()
+  }, [])
+
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const response = await axios.get('http://localhost:5001/api/notifications')
+        if (response.data.success) {
+          setNotifications(response.data.data)
+        }
+      } catch (error) {
+        console.error('Error fetching notifications:', error)
+      } finally {
+        setNotificationsLoading(false)
+      }
+    }
+
+    fetchNotifications()
   }, [])
 
   const handleDrawerToggle = () => {
@@ -744,136 +1046,68 @@ const StudentDashboard = () => {
 
   const [outpassHistoryData, setOutpassHistory] = useState([]);
 
-  const renderDashboard = () => (
-    <>
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#1A2027', mb: 2 }}>
-          Welcome back!
-        </Typography>
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<AddCircleOutlineIcon />}
-          onClick={() => handleViewChange('newRequest')}
-          fullWidth
-          sx={{
-            padding: '16px',
-            fontSize: '18px',
-            fontWeight: 'bold',
-            borderRadius: '12px',
-            boxShadow: '0 4px 10px rgba(0, 0, 0, 0.1)',
-            '&:hover': {
-              boxShadow: '0 6px 12px rgba(0, 0, 0, 0.15)',
-            },
-          }}
-        >
-          Create New Outpass Request
-        </Button>
-      </Box>
-      <Grid container spacing={3}>
-        {latestOutpass && latestOutpass.status === 'Approved' && (
-          <Grid item xs={12}>
+  const renderDashboard = () => {
+    return (
+      <>
+        <Box sx={{ mb: 4 }}>
+          <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#1A2027', mb: 2 }}>
+            Welcome back!
+          </Typography>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<AddCircleOutlineIcon />}
+            onClick={() => handleViewChange('newRequest')}
+            sx={{ mb: 3 }}
+          >
+            Create New Outpass Request
+          </Button>
+        </Box>
+
+        {latestOutpass && (
+          latestOutpass.status === 'Approved' && latestOutpass.hodApproval?.status === 'Approved' ? (
             <RecentOutpassStatus outpass={latestOutpass} />
-          </Grid>
+          ) : (
+            <OutpassTracker outpass={latestOutpass} />
+          )
         )}
-        <Grid item xs={12}>
-          <Card sx={{ height: '100%', overflow: 'hidden' }}>
-            <CardContent>
-              <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold', fontSize: { xs: '1rem', sm: '1.25rem' } }}>
-                College Notifications
-              </Typography>
-              <List sx={{ maxHeight: 400, overflowY: 'auto' }}>
-                {[
-                  { id: 1, title: "Campus Cleanup Drive", date: "2024-10-20", priority: "high" },
-                  { id: 2, title: "Annual Sports Meet", date: "2024-11-15", priority: "medium" },
-                  { id: 3, title: "Guest Lecture on AI", date: "2024-10-25", priority: "low" },
-                  { id: 4, title: "Library Timings Extended", date: "2024-10-18", priority: "medium" },
-                  { id: 5, title: "Scholarship Application Deadline", date: "2024-11-01", priority: "high" },
-                ].map((notification) => (
-                  <ListItem
-                    key={notification.id}
-                    sx={{
-                      mb: 2,
-                      borderRadius: '8px',
-                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                      transition: 'transform 0.2s',
-                      '&:hover': {
-                        transform: 'translateY(-2px)',
-                        boxShadow: '0 4px 8px rgba(0,0,0,0.15)',
-                      },
-                    }}
-                  >
-                    <ListItemText
-                      primary={
-                        <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-                          {notification.title}
-                        </Typography>
-                      }
-                      secondary={
-                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                          {notification.date}
-                        </Typography>
-                      }
-                    />
-                    <Chip
-                      label={notification.priority}
-                      size="small"
-                      sx={{
-                        backgroundColor:
-                          notification.priority === 'high'
-                            ? '#FFCDD2'
-                            : notification.priority === 'medium'
-                            ? '#FFF9C4'
-                            : '#C8E6C9',
-                        color:
-                          notification.priority === 'high'
-                            ? '#C62828'
-                            : notification.priority === 'medium'
-                            ? '#F9A825'
-                            : '#2E7D32',
-                        fontWeight: 'bold',
-                      }}
-                    />
-                  </ListItem>
-                ))}
-              </List>
-            </CardContent>
-          </Card>
+
+        <Grid container spacing={3} sx={{ mt: 2 }}>
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
+                  College Notifications
+                </Typography>
+                {notificationsLoading ? (
+                  <CircularProgress />
+                ) : (
+                  <List>
+                    {notifications.map((notification) => (
+                      <ListItem key={notification._id}>
+                        <ListItemText
+                          primary={notification.title}
+                          secondary={notification.content}
+                        />
+                        <Chip
+                          label={notification.priority}
+                          color={
+                            notification.priority === 'high' ? 'error' :
+                            notification.priority === 'medium' ? 'warning' : 'success'
+                          }
+                          size="small"
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
         </Grid>
-        <Grid item xs={12}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold', fontSize: { xs: '1rem', sm: '1.25rem' } }}>Recent Requests</Typography>
-              <List>
-                {[
-                  { destination: 'Library', date: '2024-10-11', status: 'Approved' },
-                  { destination: 'Home', date: '2024-10-10', status: 'Rejected' },
-                  { destination: 'Cafeteria', date: '2024-10-09', status: 'Approved' },
-                  { destination: 'Gym', date: '2024-10-08', status: 'Pending' },
-                ].map((request, index) => (
-                  <ListItem key={index} sx={{ borderBottom: index !== 3 ? '1px solid #E0E0E0' : 'none', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'flex-start', sm: 'center' } }}>
-                    <ListItemText
-                      primary={request.destination}
-                      secondary={`Date: ${request.date}`}
-                      sx={{ mb: { xs: 1, sm: 0 } }}
-                    />
-                    <Chip
-                      label={request.status}
-                      sx={{
-                        fontWeight: 'bold',
-                        color: request.status === 'Approved' ? '#2E7D32' : request.status === 'Pending' ? '#ED6C02' : '#D32F2F',
-                        backgroundColor: request.status === 'Approved' ? '#E8F5E9' : request.status === 'Pending' ? '#FFF3E0' : '#FFEBEE',
-                      }}
-                    />
-                  </ListItem>
-                ))}
-              </List>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-    </>
-  );
+      </>
+    )
+  }
 
   const renderOutpassHistory = () => (
     <>

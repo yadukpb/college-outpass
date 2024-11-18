@@ -95,12 +95,15 @@ const HodDashboard = () => {
       if (data.success) {
         setOutpassRequests(data.data.map(request => ({
           id: request._id,
-          studentName: request.student.name,
+          studentName: request.student?.name || 'Unknown Student',
           destination: request.destination,
-          dateOfGoing: new Date(request.dateOfGoing).toLocaleString(),
-          dateOfArrival: new Date(request.dateOfArrival).toLocaleString(),
-          status: request.hodApproval.status,
-          reason: request.reason
+          dateOfGoing: new Date(request.dateOfGoing).toLocaleDateString() + ' ' + request.timeOfGoing,
+          dateOfArrival: new Date(request.dateOfArrival).toLocaleDateString() + ' ' + request.timeOfArrival,
+          status: request.status,
+          reason: request.reason,
+          coordinatorApproval: request.coordinatorApproval,
+          wardenApproval: request.wardenApproval,
+          hodApproval: request.hodApproval
         })));
       }
     } catch (error) {
@@ -294,36 +297,56 @@ const HodDashboard = () => {
                 <TableRow>
                   <TableCell>Student Name</TableCell>
                   <TableCell>Destination</TableCell>
-                  <TableCell>Date of Going</TableCell>
-                  <TableCell>Date of Arrival</TableCell>
-                  <TableCell>Action</TableCell>
+                  <TableCell>Reason</TableCell>
+                  <TableCell>Going Out</TableCell>
+                  <TableCell>Coming Back</TableCell>
+                  <TableCell>Approvals</TableCell>
+                  <TableCell>Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {outpassRequests.filter(request => request.status === 'Pending').map((request) => (
+                {outpassRequests.map((request) => (
                   <TableRow key={request.id}>
                     <TableCell>{request.studentName}</TableCell>
                     <TableCell>{request.destination}</TableCell>
+                    <TableCell>{request.reason}</TableCell>
                     <TableCell>{request.dateOfGoing}</TableCell>
                     <TableCell>{request.dateOfArrival}</TableCell>
                     <TableCell>
-                      <Button 
-                        variant="contained" 
-                        color="primary" 
-                        size="small" 
-                        sx={{ mr: 1 }}
-                        onClick={() => handleApprove(request.id)}
-                      >
-                        Approve
-                      </Button>
-                      <Button 
-                        variant="outlined" 
-                        color="error" 
-                        size="small"
-                        onClick={() => handleReject(request.id)}
-                      >
-                        Reject
-                      </Button>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        <Chip
+                          label={`Coordinator: ${request.coordinatorApproval.status}`}
+                          color={request.coordinatorApproval.status === 'Approved' ? 'success' : 'warning'}
+                          size="small"
+                        />
+                        <Chip
+                          label={`Warden: ${request.wardenApproval.status}`}
+                          color={request.wardenApproval.status === 'Approved' ? 'success' : 'warning'}
+                          size="small"
+                        />
+                      </Box>
+                    </TableCell>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Button
+                          variant="contained"
+                          color="success"
+                          size="small"
+                          onClick={() => handleApprove(request.id)}
+                          startIcon={<CheckCircleIcon />}
+                        >
+                          Approve
+                        </Button>
+                        <Button
+                          variant="contained"
+                          color="error"
+                          size="small"
+                          onClick={() => handleReject(request.id)}
+                          startIcon={<CancelIcon />}
+                        >
+                          Reject
+                        </Button>
+                      </Box>
                     </TableCell>
                   </TableRow>
                 ))}
