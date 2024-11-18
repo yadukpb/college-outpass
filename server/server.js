@@ -707,7 +707,6 @@ app.post('/api/outpass/:outpassId/hod-approve', async (req, res) => {
 
 app.get('/api/outpass/latest/:userId', async (req, res) => {
   try {
-    // First find the student document using the userId
     const student = await Student.findOne({ user: req.params.userId });
     
     if (!student) {
@@ -717,22 +716,20 @@ app.get('/api/outpass/latest/:userId', async (req, res) => {
       });
     }
 
-    // Now find the latest approved outpass for this student
     const latestOutpass = await Outpass.findOne({ 
-      student: student._id,
-      status: 'Approved'
+      student: student._id
     })
     .sort({ createdAt: -1 })
-    .populate('student')
-    .populate('coordinator')
-    .populate('warden')
-    .populate('hod')
+    .populate('student', 'name rollNo')
+    .populate('coordinator', 'name email')
+    .populate('warden', 'name email')
+    .populate('hod', 'name email')
     .lean();
 
     if (!latestOutpass) {
       return res.status(404).json({ 
         success: false, 
-        message: 'No approved outpass found' 
+        message: 'No outpass found' 
       });
     }
 
@@ -794,6 +791,95 @@ app.put('/api/student/update-profile/:studentId', async (req, res) => {
       success: false,
       message: 'Error updating profile',
       error: error.message
+    })
+  }
+})
+
+// Get all students
+app.get('/api/students', async (req, res) => {
+  try {
+    const students = await Student.find()
+      .populate('user', 'email isVerified')
+      .populate('department', 'name')
+      .populate('class', 'name')
+      .populate('coordinator', 'name email')
+      .populate('hod', 'name email')
+      .populate('warden', 'name email')
+      .lean()
+
+    const formattedStudents = students.map(student => ({
+      id: student._id,
+      name: student.name,
+      email: student.user?.email || '',
+      department: student.department?.name || '',
+      year: student.year || '',
+      rollNo: student.rollNo || '',
+      phoneNumber: student.phoneNumber || '',
+      signedUp: student.user?.isVerified || false,
+      verified: true,
+      coordinator: student.coordinator?.name || '',
+      hod: student.hod?.name || '',
+      warden: student.warden?.name || ''
+    }))
+
+    res.json({ success: true, data: formattedStudents })
+  } catch (error) {
+    console.error('Error fetching students:', error)
+    res.status(500).json({ success: false, message: 'Error fetching students' })
+  }
+})
+
+app.post('/api/notifications', async (req, res) => {
+  try {
+    const { title, content, priority, createdBy } = req.body
+    const notification = new Notification({
+      title,
+      content,
+      priority,
+      createdBy
+    })
+    await notification.save()
+    res.status(201).json({ success: true, data: notification })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+})
+
+app.get('/api/notifications', async (req, res) => {
+  try {
+    const notifications = await Notification.find()
+      .sort({ createdAt: -1 })
+      .populate('createdBy', 'name')
+    res.json({ success: true, data: notifications })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+})
+
+app.delete('/api/notifications/:id', async (req, res) => {
+  try {
+    await Notification.findByIdAndDelete(req.params.id)
+    res.json({ success: true, message: 'Notification deleted successfully' })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+})
+
+app.get('/api/outpass/all', async (req, res) => {
+  try {
+    const outpasses = await Outpass.find()
+      .populate('student', 'name rollNo')
+      .sort({ createdAt: -1 })
+      .lean()
+
+    res.json({
+      success: true,
+      data: outpasses
+    })
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
     })
   }
 })

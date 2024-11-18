@@ -185,11 +185,11 @@ const chatSchema = new mongoose.Schema({
 
 // Notification Schema
 const notificationSchema = new mongoose.Schema({
-  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   title: { type: String, required: true },
-  message: { type: String, required: true },
-  read: { type: Boolean, default: false },
-  createdAt: { type: Date, default: Date.now }
+  content: { type: String, required: true },
+  priority: { type: String, enum: ['low', 'medium', 'high'], required: true },
+  createdAt: { type: Date, default: Date.now },
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }
 });
 
 // Branch Schema
