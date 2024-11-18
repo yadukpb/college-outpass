@@ -119,10 +119,14 @@ const outpassSchema = new mongoose.Schema({
     }
   },
   qrCode: {
-    exit: String,  // Store unique QR code for exit
-    entry: String  // Store unique QR code for entry
+    exit: String,
+    entry: String
   },
-  currentApprover: { type: String, enum: ['coordinator', 'warden', 'hod'], default: 'coordinator' },
+  currentApprover: { 
+    type: String, 
+    enum: ['coordinator', 'warden', 'hod', 'security'], 
+    default: 'coordinator' 
+  },
   coordinatorApproval: {
     status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
     timestamp: Date,
@@ -139,7 +143,23 @@ const outpassSchema = new mongoose.Schema({
     remarks: String
   },
   createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
+  updatedAt: { type: Date, default: Date.now },
+  coordinator: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  warden: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  hod: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+});
+
+// Middleware to populate coordinator, warden, and hod from student schema
+outpassSchema.pre('save', async function(next) {
+  if (this.isNew) {
+    const student = await Student.findById(this.student).populate('coordinator warden hod');
+    if (student) {
+      this.coordinator = student.coordinator;
+      this.warden = student.warden;
+      this.hod = student.hod;
+    }
+  }
+  next();
 });
 
 // Message Schema (Sub-document for Chat)
