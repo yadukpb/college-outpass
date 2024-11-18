@@ -553,67 +553,59 @@ const RippleChip = ({ label, color }) => {
 };
 
 const RecentOutpassStatus = ({ outpass }) => {
-  const getStepNumber = (status) => {
-    switch (status) {
-      case 'Pending':
-        return 0;
-      case 'Approved':
-        if (outpass.hodApproval?.status === 'Approved') return 4;
-        if (outpass.wardenApproval?.status === 'Approved') return 3;
-        if (outpass.coordinatorApproval?.status === 'Approved') return 2;
-        return 1;
-      case 'Rejected':
-        return 0;
-      default:
-        return 0;
-    }
-  };
-
   return (
     <Card sx={{ mt: 3 }}>
       <CardContent>
-        <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>Recent Outpass Status</Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Latest Approved Outpass</Typography>
+          <Chip
+            label={outpass.status}
+            color="success"
+            sx={{ fontWeight: 'bold' }}
+          />
+        </Box>
+
         <Grid container spacing={2}>
           <Grid item xs={12} sm={6}>
-            <Typography variant="body2" color="text.secondary">Going Out Date:</Typography>
+            <Typography variant="body2" color="text.secondary">Destination</Typography>
+            <Typography variant="body1" fontWeight="bold">{outpass.destination}</Typography>
+          </Grid>
+
+          <Grid item xs={12} sm={6}>
+            <Typography variant="body2" color="text.secondary">Going Out</Typography>
             <Typography variant="body1" fontWeight="bold">
-              {new Date(outpass.dateOfGoing).toLocaleDateString()}
+              {new Date(outpass.dateOfGoing).toLocaleDateString()} {outpass.timeOfGoing}
             </Typography>
           </Grid>
+
           <Grid item xs={12} sm={6}>
-            <Typography variant="body2" color="text.secondary">Going Out Time:</Typography>
-            <Typography variant="body1" fontWeight="bold">{outpass.timeOfGoing}</Typography>
-          </Grid>
-        </Grid>
-        <Divider sx={{ my: 2 }} />
-        <Grid container spacing={2}>
-          <Grid item xs={12} sm={6}>
-            <Typography variant="body2" color="text.secondary">Coming Back Date:</Typography>
+            <Typography variant="body2" color="text.secondary">Coming Back</Typography>
             <Typography variant="body1" fontWeight="bold">
-              {new Date(outpass.dateOfArrival).toLocaleDateString()}
+              {new Date(outpass.dateOfArrival).toLocaleDateString()} {outpass.timeOfArrival}
             </Typography>
           </Grid>
-          <Grid item xs={12} sm={6}>
-            <Typography variant="body2" color="text.secondary">Coming Back Time:</Typography>
-            <Typography variant="body1" fontWeight="bold">{outpass.timeOfArrival}</Typography>
-          </Grid>
         </Grid>
+
         {outpass.qrCode && (
-          <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-around' }}>
-            <Box>
-              <Typography variant="body2" color="text.secondary" align="center">Exit QR Code:</Typography>
-              <QRCodeSVG value={outpass.qrCode.exit} size={128} />
-            </Box>
-            <Box>
-              <Typography variant="body2" color="text.secondary" align="center">Entry QR Code:</Typography>
-              <QRCodeSVG value={outpass.qrCode.entry} size={128} />
+          <Box sx={{ mt: 3 }}>
+            <Divider sx={{ my: 2 }} />
+            <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>QR Codes</Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-around' }}>
+              <Box>
+                <Typography variant="body2" color="text.secondary" align="center">Exit QR</Typography>
+                <QRCodeSVG value={outpass.qrCode.exit} size={128} />
+              </Box>
+              <Box>
+                <Typography variant="body2" color="text.secondary" align="center">Entry QR</Typography>
+                <QRCodeSVG value={outpass.qrCode.entry} size={128} />
+              </Box>
             </Box>
           </Box>
         )}
       </CardContent>
     </Card>
-  );
-};
+  )
+}
 
 const StudentDashboard = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -644,29 +636,21 @@ const StudentDashboard = () => {
   useEffect(() => {
     const fetchLatestOutpass = async () => {
       try {
-        // First get the student profile using userId
-        const userId = localStorage.getItem('userId');
-        const studentResponse = await axios.get(`http://localhost:5001/api/student/profile/${userId}`);
+        const userId = localStorage.getItem('userId')
+        const response = await axios.get(`http://localhost:5001/api/outpass/latest/${userId}`)
         
-        if (studentResponse.data.success) {
-          // Now use the student._id to fetch the latest outpass
-          const studentId = studentResponse.data.data._id;
-          localStorage.setItem('studentId', studentId); // Store for future use
-          
-          const outpassResponse = await axios.get(`http://localhost:5001/api/outpass/latest/${studentId}`);
-          if (outpassResponse.data.success) {
-            setLatestOutpass(outpassResponse.data.data);
-          }
+        if (response.data.success) {
+          setLatestOutpass(response.data.data)
         }
       } catch (error) {
-        console.error('Error fetching latest outpass:', error);
+        console.error('Error fetching latest outpass:', error)
       } finally {
-        setLoading(false);
+        setLoading(false)
       }
-    };
+    }
 
-    fetchLatestOutpass();
-  }, []);
+    fetchLatestOutpass()
+  }, [])
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -787,7 +771,7 @@ const StudentDashboard = () => {
         </Button>
       </Box>
       <Grid container spacing={3}>
-        {latestOutpass && (
+        {latestOutpass && latestOutpass.status === 'Approved' && (
           <Grid item xs={12}>
             <RecentOutpassStatus outpass={latestOutpass} />
           </Grid>
